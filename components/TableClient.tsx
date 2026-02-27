@@ -206,14 +206,15 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
               <th data-column="F" title="Column F">Elev Loss</th>
               <th data-column="G" title="Column G">Net Elev Diff</th>
               <th data-column="H" title="Column H">Estimated Pace</th>
-              <th data-column="I" title="Column I">Actual Pace</th>
-              {showInitial ? <th data-column="J" title="Column J">Initial Est. Start</th> : null}
-              <th data-column="K" title="Column K">Updated Est. Start</th>
-              <th data-column="L" title="Column L">Actual Start</th>
-              <th data-column="M" title="Column M">Delta vs J</th>
-              <th data-column="N" title="Column N">Est. Van Stint</th>
-              <th data-column="O" title="Column O">Actual Van Stint</th>
-              <th data-column="P" title="Column P">Exchange Location</th>
+              <th data-column="I" title="Column I">Leg Time at Estimated Pace</th>
+              <th data-column="J" title="Column J">Actual Pace</th>
+              {showInitial ? <th data-column="K" title="Column K">Initial Est. Start</th> : null}
+              <th data-column="L" title="Column L">Updated Est. Start</th>
+              <th data-column="M" title="Column M">Actual Start</th>
+              <th data-column="N" title="Column N">Delta vs J</th>
+              <th data-column="O" title="Column O">Est. Van Stint</th>
+              <th data-column="P" title="Column P">Actual Van Stint</th>
+              <th data-column="Q" title="Column Q">Exchange Location</th>
             </tr>
           </thead>
           <tbody>
@@ -305,9 +306,9 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                       }}
                     />
                     <div className="muted">{formatSecondsToPace(row.estimatedPaceSpm)}</div>
-                    {row.leg > 12 && row.isOverride ? <div className="muted">override</div> : null}
                   </td>
 
+                  <td>{formatSecondsToHMS(row.estimatedPaceSpm !== null ? Math.round(row.legMileage * row.estimatedPaceSpm) : null)}</td>
                   <td style={getVanCellStyle(row.runnerNumber, "actualPace")}>{formatSecondsToPace(row.actualPaceSpm)}</td>
                   {showInitial ? (
                     <td style={getVanCellStyle(row.runnerNumber, "initialEstimatedStart")}>{formatUTCISOStringToLA_friendly(row.initialEstimatedStartTime)}</td>
