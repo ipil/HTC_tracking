@@ -209,7 +209,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
               <th data-column="N" title="Column N">Delta vs J</th>
               <th data-column="O" title="Column O">Est. Van Stint</th>
               <th data-column="P" title="Column P">Actual Van Stint</th>
-              <th data-column="Q" title="Column Q">Exchange Location</th>
+              <th data-column="Q" title="Column Q" style={{ width: "1%" }}>Exchange Location</th>
             </tr>
           </thead>
           <tbody>
@@ -323,7 +323,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                   <td style={getVanCellStyle(row.runnerNumber, "delta")}>{formatSecondsToHMS(row.deltaToPreRaceSec)}</td>
                   <td style={getVanCellStyle(row.runnerNumber, "estimatedStint")}>{formatSecondsToHMS(row.estimatedVanStintSec)}</td>
                   <td style={getVanCellStyle(row.runnerNumber, "actualStint")}>{formatSecondsToHMS(row.actualVanStintSec)}</td>
-                  <td>
+                  <td style={{ width: "1%" }}>
                     {isAdmin ? (
                       <div style={{ display: "grid", gap: "0.3rem" }}>
                         <input
