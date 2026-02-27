@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { isAdminAuthenticated } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { badRequest, forbidden } from "@/lib/http";
+import { badRequest } from "@/lib/http";
 
 type ImportRow = {
   leg: number;
@@ -15,12 +14,9 @@ type ImportRow = {
 };
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const cookieStore = await cookies();
-  console.log("ALL COOKIES:", cookieStore.getAll());
-  console.log("ADMIN COOKIE:", cookieStore.get("admin_auth"));
-
-  if (!(await isAdminAuthenticated())) {
-    return forbidden();
+  const admin = (await cookies()).get("admin_auth")?.value;
+  if (admin !== "1") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null);
