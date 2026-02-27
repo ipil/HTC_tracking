@@ -6,9 +6,12 @@ export const VAN_COLUMNS = new Set([
   "runner",
   "name",
   "leg",
+  "estimatedPace",
+  "estimatedLegTime",
   "actualPace",
   "initialEstimatedStart",
   "updatedEstimatedStart",
+  "actualStart",
   "delta",
   "estimatedStint",
   "actualStint"

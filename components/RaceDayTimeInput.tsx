@@ -71,6 +71,7 @@ export default function RaceDayTimeInput({
   return (
     <div
       style={{
+        width: "fit-content",
         display: "grid",
         gridTemplateColumns: "auto auto auto auto auto auto auto",
         gap: "0.35rem",

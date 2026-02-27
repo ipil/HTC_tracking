@@ -20,7 +20,6 @@ type Props = {
 
 export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [data, setData] = useState<TableData>(initialData);
-  const [showInitial, setShowInitial] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const nextLegIndex = useMemo(() => getNextLegIndex(data.rows), [data.rows]);
@@ -154,8 +153,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       ) : null}
       <section className="panel" style={{ display: "grid", gap: "0.8rem" }}>
         <h2>Race Timing</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(220px, 1fr))", gap: "0.7rem" }}>
-          <label>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, max-content)", gap: "1rem", justifyContent: "start" }}>
+          <label style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
             <div className="muted">Race Start Time</div>
             <RaceDayTimeInput
               disabled={!canEdit}
@@ -169,7 +168,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
             />
           </label>
 
-          <label>
+          <label style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
             <div className="muted">Finish Time</div>
             <RaceDayTimeInput
               disabled={!canEdit}
@@ -185,9 +184,6 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
         </div>
         <div className="muted">Total elapsed: {formatSecondsToHMS(totalElapsedSec)}</div>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <button className="secondary" onClick={() => setShowInitial((v) => !v)}>
-            {showInitial ? "Hide" : "Show"} Column J
-          </button>
           {isAdmin ? <ImportLegsModal onImported={refresh} /> : null}
           {busy ? <span className="muted">Saving...</span> : null}
         </div>
@@ -208,9 +204,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
               <th data-column="H" title="Column H">Estimated Pace</th>
               <th data-column="I" title="Column I">Leg Time at Estimated Pace</th>
               <th data-column="J" title="Column J">Actual Pace</th>
-              {showInitial ? <th data-column="K" title="Column K">Initial Est. Start</th> : null}
-              <th data-column="L" title="Column L">Updated Est. Start</th>
-              <th data-column="M" title="Column M">Actual Start</th>
+              <th data-column="L" title="Column L">Est. Start Time</th>
+              <th data-column="M" title="Column M">Actual Start Time</th>
               <th data-column="N" title="Column N">Delta vs J</th>
               <th data-column="O" title="Column O">Est. Van Stint</th>
               <th data-column="P" title="Column P">Actual Van Stint</th>
@@ -297,7 +292,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                     )}
                   </td>
 
-                  <td>
+                  <td style={getVanCellStyle(row.runnerNumber, "estimatedPace")}>
                     <PaceEditor
                       disabled={!canEdit}
                       value={row.leg <= 12 ? row.runnerDefaultPaceSpm : row.estimatedPaceOverrideSpm ?? row.runnerDefaultPaceSpm}
@@ -308,13 +303,12 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                     <div className="muted">{formatSecondsToPace(row.estimatedPaceSpm)}</div>
                   </td>
 
-                  <td>{formatSecondsToHMS(row.estimatedPaceSpm !== null ? Math.round(row.legMileage * row.estimatedPaceSpm) : null)}</td>
+                  <td style={getVanCellStyle(row.runnerNumber, "estimatedLegTime")}>
+                    {formatSecondsToHMS(row.estimatedPaceSpm !== null ? Math.round(row.legMileage * row.estimatedPaceSpm) : null)}
+                  </td>
                   <td style={getVanCellStyle(row.runnerNumber, "actualPace")}>{formatSecondsToPace(row.actualPaceSpm)}</td>
-                  {showInitial ? (
-                    <td style={getVanCellStyle(row.runnerNumber, "initialEstimatedStart")}>{formatUTCISOStringToLA_friendly(row.initialEstimatedStartTime)}</td>
-                  ) : null}
                   <td style={getVanCellStyle(row.runnerNumber, "updatedEstimatedStart")}>{formatUTCISOStringToLA_friendly(row.updatedEstimatedStartTime)}</td>
-                  <td>
+                  <td style={getVanCellStyle(row.runnerNumber, "actualStart")}>
                     <RaceDayTimeInput
                       disabled={!canEdit}
                       value={row.actualLegStartTime}
