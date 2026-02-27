@@ -1,14 +1,20 @@
 import Link from "next/link";
 import AccessIndicator, { getAccessLevelFromCookies } from "@/components/AccessIndicator";
 import LogoutButton from "@/components/LogoutButton";
+import RunnersPanel from "@/components/RunnersPanel";
 import TableClient from "@/components/TableClient";
+import { getRunnersData } from "@/lib/runnersData";
 import { getTableData } from "@/lib/tableData";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const [data, accessLevel] = await Promise.all([getTableData(), getAccessLevelFromCookies()]);
+  const [data, accessLevel, runners] = await Promise.all([
+    getTableData(),
+    getAccessLevelFromCookies(),
+    getRunnersData()
+  ]);
   const isAdmin = accessLevel === "admin";
   const isLoggedIn = accessLevel === "team-editor" || accessLevel === "admin";
   const canEdit = accessLevel !== "viewer";
@@ -30,6 +36,7 @@ export default async function HomePage() {
           </div>
         </header>
 
+        {isAdmin ? <RunnersPanel initialRunners={runners} /> : null}
         <TableClient initialData={data} isAdmin={isAdmin} canEdit={canEdit} />
       </div>
     </main>
