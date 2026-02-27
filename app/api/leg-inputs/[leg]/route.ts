@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { isSiteAuthenticated } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/http";
+import { normalizeUTCISOString } from "@/lib/time";
 
 export async function PATCH(
   request: NextRequest,
@@ -49,9 +50,20 @@ export async function PATCH(
 
   updates.push("updated_at = now()");
   values.push(leg);
-  const query = `update leg_inputs set ${updates.join(", ")} where leg = $${values.length}`;
-  await sql.query(query, values);
+  const query = `update leg_inputs set ${updates.join(", ")} where leg = $${values.length} returning leg, estimated_pace_override_spm, actual_start_time, updated_at`;
+  const result = await sql.query<{
+    leg: number;
+    estimated_pace_override_spm: number | null;
+    actual_start_time: unknown;
+    updated_at: unknown;
+  }>(query, values);
   console.info(`[api/leg-inputs] updated leg=${leg}`);
 
-  return NextResponse.json({ ok: true });
+  const row = result.rows[0];
+  return NextResponse.json({
+    leg: row.leg,
+    estimated_pace_override_spm: row.estimated_pace_override_spm,
+    actual_start_time: normalizeUTCISOString(row.actual_start_time),
+    updated_at: normalizeUTCISOString(row.updated_at)
+  });
 }

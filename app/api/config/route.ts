@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { isSiteAuthenticated } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/http";
+import { normalizeUTCISOString } from "@/lib/time";
 
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
   if (!(await isSiteAuthenticated())) {
@@ -28,9 +29,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
   const result = await sql.query<{
     id: number;
-    race_start_time: string | null;
-    finish_time: string | null;
-    updated_at: string;
+    race_start_time: unknown;
+    finish_time: unknown;
+    updated_at: unknown;
   }>(
     `
       insert into app_config (id, race_start_time, finish_time)
@@ -39,11 +40,17 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
       set race_start_time = case when $3 then excluded.race_start_time else app_config.race_start_time end,
           finish_time = case when $4 then excluded.finish_time else app_config.finish_time end,
           updated_at = now()
-      returning id, race_start_time::text, finish_time::text, updated_at::text
+      returning id, race_start_time, finish_time, updated_at
     `,
     [raceStart ?? null, finishTime ?? null, raceStart !== undefined, finishTime !== undefined]
   );
 
   console.info("[api/config] updated app_config id=1");
-  return NextResponse.json(result.rows[0]);
+  const row = result.rows[0];
+  return NextResponse.json({
+    id: row.id,
+    race_start_time: normalizeUTCISOString(row.race_start_time),
+    finish_time: normalizeUTCISOString(row.finish_time),
+    updated_at: normalizeUTCISOString(row.updated_at)
+  });
 }

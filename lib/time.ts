@@ -71,3 +71,32 @@ export function formatUTCISOStringToLA_friendly(value: string | null): string {
 
   return parsed.toFormat("ccc h:mm a");
 }
+
+export function normalizeUTCISOString(value: unknown): string | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "string") {
+    const iso = DateTime.fromISO(value, { zone: "utc" });
+    if (iso.isValid) {
+      return iso.toUTC().toJSDate().toISOString();
+    }
+
+    const sql = DateTime.fromSQL(value, { zone: "utc" });
+    if (sql.isValid) {
+      return sql.toUTC().toJSDate().toISOString();
+    }
+
+    const jsDate = new Date(value);
+    if (!Number.isNaN(jsDate.getTime())) {
+      return jsDate.toISOString();
+    }
+  }
+
+  return null;
+}

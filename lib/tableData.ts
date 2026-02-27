@@ -5,6 +5,7 @@ import {
   computeUpdatedEstimates,
   computeVanStints
 } from "@/lib/relayMath";
+import { normalizeUTCISOString } from "@/lib/time";
 import type { TableData, TableRow } from "@/types/domain";
 
 type JoinedRow = {
@@ -36,15 +37,19 @@ function minMax(values: number[]): { min: number; max: number } {
 
 export async function getTableData(): Promise<TableData> {
   const configResult = await sql<{
-    race_start_time: string | null;
-    finish_time: string | null;
+    race_start_time: unknown;
+    finish_time: unknown;
   }>`
-    select race_start_time::text, finish_time::text
+    select race_start_time, finish_time
     from app_config
     where id = 1
   `;
 
-  const configRow = configResult.rows[0] ?? { race_start_time: null, finish_time: null };
+  const configRaw = configResult.rows[0] ?? { race_start_time: null, finish_time: null };
+  const configRow = {
+    race_start_time: normalizeUTCISOString(configRaw.race_start_time),
+    finish_time: normalizeUTCISOString(configRaw.finish_time)
+  };
 
   const result = await sql<JoinedRow>`
     select
@@ -60,14 +65,17 @@ export async function getTableData(): Promise<TableData> {
       l.exchange_url,
       li.estimated_pace_override_spm,
       coalesce(li.estimated_pace_override_spm, r.default_estimated_pace_spm) as effective_estimated_pace_spm,
-      li.actual_start_time::text
+      li.actual_start_time
     from legs l
     join runners r on r.runner_number = l.runner_number
     left join leg_inputs li on li.leg = l.leg
     order by l.leg asc
   `;
 
-  const sorted = result.rows;
+  const sorted = result.rows.map((row) => ({
+    ...row,
+    actual_start_time: normalizeUTCISOString(row.actual_start_time)
+  }));
 
   const estimatedDurations = sorted.map((row) => {
     const pace = row.effective_estimated_pace_spm;
