@@ -1,18 +1,16 @@
 import Link from "next/link";
 import AccessIndicator, { getAccessLevelFromCookies } from "@/components/AccessIndicator";
+import LogoutButton from "@/components/LogoutButton";
 import TableClient from "@/components/TableClient";
 import { getTableData } from "@/lib/tableData";
-import { isAdminAuthenticated } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const [data, isAdmin, accessLevel] = await Promise.all([
-    getTableData(),
-    isAdminAuthenticated(),
-    getAccessLevelFromCookies()
-  ]);
+  const [data, accessLevel] = await Promise.all([getTableData(), getAccessLevelFromCookies()]);
+  const isAdmin = accessLevel === "admin";
+  const isLoggedIn = accessLevel === "team-editor" || accessLevel === "admin";
   const canEdit = accessLevel !== "viewer";
 
   return (
@@ -25,10 +23,10 @@ export default async function HomePage() {
             <p className="muted">36-leg collaborative planning table with relay timing logic.</p>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            {isAdmin ? <span>Admin mode</span> : <Link href="/admin/login">Admin login</Link>}
-            <Link className="secondary" href="/api/auth/logout">
-              Logout
-            </Link>
+            {accessLevel === "admin" ? <span>Admin Mode</span> : null}
+            {accessLevel === "team-editor" ? <span>Team Editor Mode</span> : null}
+            {!isAdmin ? <Link href="/admin/login">Admin login</Link> : null}
+            {isLoggedIn ? <LogoutButton /> : null}
           </div>
         </header>
 

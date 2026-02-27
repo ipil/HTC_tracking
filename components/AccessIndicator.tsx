@@ -22,7 +22,7 @@ export default async function AccessIndicator(): Promise<React.JSX.Element> {
   if (accessLevel === "admin") {
     return (
       <div className="panel" style={{ borderColor: "#7f2430", backgroundColor: "#fff3f5", padding: "0.6rem 0.8rem" }}>
-        <strong>Admin</strong> — full access
+        <strong>Admin Mode</strong> — full access
       </div>
     );
   }
@@ -30,14 +30,14 @@ export default async function AccessIndicator(): Promise<React.JSX.Element> {
   if (accessLevel === "team-editor") {
     return (
       <div className="panel" style={{ borderColor: "#1f5134", backgroundColor: "#eef9f0", padding: "0.6rem 0.8rem" }}>
-        <strong>Team Editor</strong> — you can edit paces and times
+        <strong>Team Editor Mode</strong> — you can edit paces and times
       </div>
     );
   }
 
   return (
     <div className="panel" style={{ borderColor: "#7b6a1e", backgroundColor: "#fff8dd", padding: "0.6rem 0.8rem" }}>
-      <strong>Viewing only</strong> — ask for the password to edit
+      <strong>Viewer Mode</strong> — ask for the password to edit
     </div>
   );
 }
