@@ -39,6 +39,17 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       return;
     }
     setBusy(true);
+    const ok = await patch(path, body);
+    if (ok) {
+      await refresh();
+    }
+    setBusy(false);
+  }
+
+  async function patch(path: string, body: unknown): Promise<boolean> {
+    if (!canEdit) {
+      return false;
+    }
     const res = await fetch(path, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -46,12 +57,10 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     });
 
     if (!res.ok) {
-      setBusy(false);
-      return;
+      return false;
     }
 
-    await refresh();
-    setBusy(false);
+    return true;
   }
 
   function updateRowLocal(leg: number, patch: Partial<TableRow>) {
@@ -72,12 +81,57 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
         if (row.runnerNumber !== runnerNumber) {
           return row;
         }
+        const isFirstLeg = row.leg === runnerNumber;
+        const nextOverride = isFirstLeg ? null : row.estimatedPaceOverrideSpm;
+        const nextEstimatedPace = nextOverride ?? pace;
         return {
           ...row,
-          runnerDefaultPaceSpm: pace
+          runnerDefaultPaceSpm: pace,
+          estimatedPaceOverrideSpm: nextOverride,
+          estimatedPaceSpm: nextEstimatedPace,
+          isOverride: nextOverride !== null && nextOverride !== pace
         };
       })
     }));
+  }
+
+  async function saveEstimatedPace(row: TableRow, value: number | null) {
+    if (!canEdit) {
+      return;
+    }
+    setBusy(true);
+
+    if (row.leg <= 12) {
+      updateRunnerDefaultLocal(row.runnerNumber, value);
+      const paceSaved = await patch(`/api/runners/${row.runnerNumber}`, {
+        default_estimated_pace_spm: value
+      });
+
+      let overrideCleared = true;
+      if (row.estimatedPaceOverrideSpm !== null) {
+        overrideCleared = await patch(`/api/leg-inputs/${row.leg}`, {
+          estimated_pace_override_spm: null
+        });
+      }
+
+      if (paceSaved && overrideCleared) {
+        await refresh();
+      }
+      setBusy(false);
+      return;
+    }
+
+    const nextEstimatedPace = value ?? row.runnerDefaultPaceSpm;
+    updateRowLocal(row.leg, {
+      estimatedPaceSpm: nextEstimatedPace,
+      estimatedPaceOverrideSpm: value,
+      isOverride: value !== null && value !== row.runnerDefaultPaceSpm
+    });
+    const saved = await patch(`/api/leg-inputs/${row.leg}`, { estimated_pace_override_spm: value });
+    if (saved) {
+      await refresh();
+    }
+    setBusy(false);
   }
 
   const totalElapsedSec = useMemo(() => {
@@ -252,31 +306,13 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                   <td>
                     <PaceEditor
                       disabled={!canEdit}
-                      value={row.estimatedPaceOverrideSpm ?? row.estimatedPaceSpm}
+                      value={row.leg <= 12 ? row.runnerDefaultPaceSpm : row.estimatedPaceOverrideSpm ?? row.runnerDefaultPaceSpm}
                       onSave={(value) => {
-                        updateRowLocal(row.leg, {
-                          estimatedPaceSpm: value,
-                          estimatedPaceOverrideSpm: value,
-                          isOverride: value !== row.runnerDefaultPaceSpm
-                        });
-                        void save(`/api/leg-inputs/${row.leg}`, { estimated_pace_override_spm: value });
+                        void saveEstimatedPace(row, value);
                       }}
                     />
                     <div className="muted">{formatSecondsToPace(row.estimatedPaceSpm)}</div>
-                    {row.isOverride ? <div className="muted">override</div> : null}
-                    <div>
-                      Runner default:
-                      <PaceEditor
-                        disabled={!canEdit}
-                        value={row.runnerDefaultPaceSpm}
-                        onSave={(value) => {
-                          updateRunnerDefaultLocal(row.runnerNumber, value);
-                          void save(`/api/runners/${row.runnerNumber}`, {
-                            default_estimated_pace_spm: value
-                          });
-                        }}
-                      />
-                    </div>
+                    {row.leg > 12 && row.isOverride ? <div className="muted">override</div> : null}
                   </td>
 
                   <td style={getVanCellStyle(row.runnerNumber, "actualPace")}>{formatSecondsToPace(row.actualPaceSpm)}</td>
