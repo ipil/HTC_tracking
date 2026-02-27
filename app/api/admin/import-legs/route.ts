@@ -8,6 +8,7 @@ type ImportRow = {
   leg_mileage: number;
   elev_gain_ft: number;
   elev_loss_ft: number;
+  net_elev_diff_ft: number;
   exchange_label: string;
   exchange_url: string;
 };
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       typeof row.leg_mileage !== "number" ||
       typeof row.elev_gain_ft !== "number" ||
       typeof row.elev_loss_ft !== "number" ||
+      typeof row.net_elev_diff_ft !== "number" ||
       typeof row.exchange_label !== "string" ||
       typeof row.exchange_url !== "string"
     ) {
@@ -43,8 +45,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         set leg_mileage = $2,
             elev_gain_ft = $3,
             elev_loss_ft = $4,
-            exchange_label = $5,
-            exchange_url = $6,
+            net_elev_diff_ft = $5,
+            exchange_label = $6,
+            exchange_url = $7,
             updated_at = now()
         where leg = $1
       `,
@@ -53,6 +56,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         row.leg_mileage,
         row.elev_gain_ft,
         row.elev_loss_ft,
+        row.net_elev_diff_ft,
         row.exchange_label,
         row.exchange_url
       ]

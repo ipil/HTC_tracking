@@ -8,6 +8,7 @@ type ParsedRow = {
   leg_mileage: number;
   elev_gain_ft: number;
   elev_loss_ft: number;
+  net_elev_diff_ft: number;
   exchange_label: string;
   exchange_url: string;
 };
@@ -39,20 +40,21 @@ function parseRows(input: string): ParsedRow[] {
       continue;
     }
 
-    if (cells.length < 6) {
-      throw new Error(`Row ${index + 1} must have 6 columns.`);
+    if (cells.length < 7) {
+      throw new Error(`Row ${index + 1} must have 7 columns.`);
     }
 
     const leg = Number(cells[0]);
     const legMileage = Number(cells[1]);
     const elevGain = Number(cells[2]);
     const elevLoss = Number(cells[3]);
+    const netElevDiff = Number(cells[4]);
 
     if (!Number.isInteger(leg) || leg < 1 || leg > 36) {
       throw new Error(`Row ${index + 1} has an invalid leg number.`);
     }
 
-    if (![legMileage, elevGain, elevLoss].every((value) => Number.isFinite(value))) {
+    if (![legMileage, elevGain, elevLoss, netElevDiff].every((value) => Number.isFinite(value))) {
       throw new Error(`Row ${index + 1} has invalid numeric values.`);
     }
 
@@ -61,8 +63,9 @@ function parseRows(input: string): ParsedRow[] {
       leg_mileage: legMileage,
       elev_gain_ft: elevGain,
       elev_loss_ft: elevLoss,
-      exchange_label: cells[4]?.trim() ?? "",
-      exchange_url: cells[5]?.trim() ?? ""
+      net_elev_diff_ft: netElevDiff,
+      exchange_label: cells[5]?.trim() ?? "",
+      exchange_url: cells[6]?.trim() ?? ""
     });
   }
 
@@ -141,7 +144,7 @@ export default function ImportLegsModal({ onImported }: Props): React.JSX.Elemen
             <textarea
               value={value}
               onChange={(event) => setValue(event.target.value)}
-              placeholder={"Leg\tMileage\tElev Gain\tElev Loss\tExchange Name\tExchange URL"}
+              placeholder={"Leg\tMileage\tElev Gain\tElev Loss\tNet Elev. Diff.\tExchange Name\tExchange URL"}
               rows={12}
               style={{
                 width: "100%",
