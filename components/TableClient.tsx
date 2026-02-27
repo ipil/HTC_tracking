@@ -101,7 +101,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
         <h2>Race Timing</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(220px, 1fr))", gap: "0.7rem" }}>
           <label>
-            <div className="muted">Race Start Time (LA)</div>
+            <div className="muted">Race Start Time</div>
             <input
               type="datetime-local"
               disabled={!canEdit}
@@ -118,7 +118,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
           </label>
 
           <label>
-            <div className="muted">Finish Time (LA)</div>
+            <div className="muted">Finish Time</div>
             <input
               type="datetime-local"
               disabled={!canEdit}
