@@ -12,9 +12,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const domain = isProd ? "klarquist.run" : undefined;
 
   const expected = process.env.SITE_PASSWORD;
+  if (!expected) {
+    return NextResponse.json({ error: "SITE_PASSWORD is not configured" }, { status: 503 });
+  }
+
   const body = await request.json().catch(() => null);
   const password = body?.password;
-  if (expected && (typeof password !== "string" || password !== expected)) {
+  if (typeof password !== "string" || password !== expected) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
