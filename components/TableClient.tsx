@@ -14,9 +14,10 @@ import type { TableData, TableRow } from "@/types/domain";
 type Props = {
   initialData: TableData;
   isAdmin: boolean;
+  canEdit: boolean;
 };
 
-export default function TableClient({ initialData, isAdmin }: Props) {
+export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [data, setData] = useState<TableData>(initialData);
   const [showInitial, setShowInitial] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -32,6 +33,9 @@ export default function TableClient({ initialData, isAdmin }: Props) {
   }
 
   async function save(path: string, body: unknown) {
+    if (!canEdit) {
+      return;
+    }
     setBusy(true);
     const res = await fetch(path, {
       method: "PATCH",
@@ -88,6 +92,11 @@ export default function TableClient({ initialData, isAdmin }: Props) {
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
+      {!canEdit ? (
+        <section className="panel" style={{ borderColor: "#7b6a1e", backgroundColor: "#fff8dd" }}>
+          <strong>Viewer mode:</strong> editing is disabled until you log in.
+        </section>
+      ) : null}
       <section className="panel" style={{ display: "grid", gap: "0.8rem" }}>
         <h2>Race Timing</h2>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(220px, 1fr))", gap: "0.7rem" }}>
@@ -95,6 +104,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
             <div className="muted">Race Start Time (LA)</div>
             <input
               type="datetime-local"
+              disabled={!canEdit}
               value={formatUTCISOStringToLA_datetimeLocal(data.race_start_time)}
               onChange={(event) => {
                 const iso = parseLA_datetimeLocalToUTCISOString(event.target.value);
@@ -111,6 +121,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
             <div className="muted">Finish Time (LA)</div>
             <input
               type="datetime-local"
+              disabled={!canEdit}
               value={formatUTCISOStringToLA_datetimeLocal(data.finish_time)}
               onChange={(event) => {
                 const iso = parseLA_datetimeLocalToUTCISOString(event.target.value);
@@ -164,6 +175,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
                     {isAdmin ? (
                       <input
                         type="text"
+                        disabled={!canEdit}
                         defaultValue={row.runnerName}
                         onBlur={(event) => {
                           const value = event.target.value;
@@ -186,6 +198,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
                     {isAdmin ? (
                       <input
                         type="number"
+                        disabled={!canEdit}
                         step="0.01"
                         defaultValue={row.legMileage}
                         onBlur={(event) => {
@@ -203,6 +216,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
                     {isAdmin ? (
                       <input
                         type="number"
+                        disabled={!canEdit}
                         defaultValue={row.elevGainFt}
                         onBlur={(event) => {
                           const value = Number(event.target.value);
@@ -219,6 +233,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
                     {isAdmin ? (
                       <input
                         type="number"
+                        disabled={!canEdit}
                         defaultValue={row.elevLossFt}
                         onBlur={(event) => {
                           const value = Number(event.target.value);
@@ -235,6 +250,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
                     {isAdmin ? (
                       <input
                         type="number"
+                        disabled={!canEdit}
                         defaultValue={row.netElevDiffFt}
                         onBlur={(event) => {
                           const value = Number(event.target.value);
@@ -250,6 +266,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
                   <td>
                     <input
                       type="number"
+                      disabled={!canEdit}
                       defaultValue={row.estimatedPaceOverrideSpm ?? row.estimatedPaceSpm ?? ""}
                       onBlur={(event) => {
                         const value = event.target.value === "" ? null : Number(event.target.value);
@@ -272,6 +289,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
                       Runner default:
                       <input
                         type="number"
+                        disabled={!canEdit}
                         defaultValue={row.runnerDefaultPaceSpm ?? ""}
                         onBlur={(event) => {
                           const value = event.target.value === "" ? null : Number(event.target.value);
@@ -292,6 +310,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
                   <td>
                     <input
                       type="datetime-local"
+                      disabled={!canEdit}
                       value={formatUTCISOStringToLA_datetimeLocal(row.actualLegStartTime)}
                       onChange={(event) => {
                         const iso = parseLA_datetimeLocalToUTCISOString(event.target.value);
@@ -311,6 +330,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
                       <div style={{ display: "grid", gap: "0.3rem" }}>
                         <input
                           type="text"
+                          disabled={!canEdit}
                           defaultValue={row.exchangeLabel}
                           onBlur={(event) => {
                             const value = event.target.value;
@@ -320,6 +340,7 @@ export default function TableClient({ initialData, isAdmin }: Props) {
                         />
                         <input
                           type="text"
+                          disabled={!canEdit}
                           defaultValue={row.exchangeUrl}
                           onBlur={(event) => {
                             const value = event.target.value;

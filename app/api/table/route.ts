@@ -10,5 +10,9 @@ export async function GET(): Promise<NextResponse> {
     return unauthorized();
   }
   const data = await getTableData();
-  return NextResponse.json(data);
+  return NextResponse.json(data, {
+    headers: {
+      "Cache-Control": "no-store"
+    }
+  });
 }
