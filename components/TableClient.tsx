@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import ImportLegsModal from "@/components/ImportLegsModal";
 import { getHeatmapStyle, getNextLegIndex, getVanCellStyle } from "@/lib/formatRules";
 import {
   formatSecondsToHMS,
@@ -241,6 +242,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
           <button className="secondary" onClick={() => setShowInitial((v) => !v)}>
             {showInitial ? "Hide" : "Show"} Column J
           </button>
+          {isAdmin ? <ImportLegsModal onImported={refresh} /> : null}
           {busy ? <span className="muted">Saving...</span> : null}
         </div>
       </section>
