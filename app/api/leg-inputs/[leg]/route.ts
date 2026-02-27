@@ -5,14 +5,14 @@ import { badRequest, unauthorized } from "@/lib/http";
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: { leg: string } }
+  ctx: RouteContext<"/api/leg-inputs/[leg]">
 ): Promise<NextResponse> {
   if (!(await isSiteAuthenticated())) {
     return unauthorized();
   }
 
-  const params = context.params;
-  const leg = Number(params.leg);
+  const { leg: legParam } = await ctx.params;
+  const leg = Number(legParam);
   if (!Number.isInteger(leg) || leg < 1 || leg > 36) {
     return badRequest("Invalid leg");
   }

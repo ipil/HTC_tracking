@@ -5,7 +5,7 @@ import { badRequest, forbidden, unauthorized } from "@/lib/http";
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: { runner_number: string } }
+  ctx: RouteContext<"/api/runners/[runner_number]">
 ): Promise<NextResponse> {
   const siteOk = await isSiteAuthenticated();
   if (!siteOk) {
@@ -13,8 +13,8 @@ export async function PATCH(
   }
 
   const adminOk = await isAdminAuthenticated();
-  const params = context.params;
-  const runnerNumber = Number(params.runner_number);
+  const { runner_number } = await ctx.params;
+  const runnerNumber = Number(runner_number);
   if (!Number.isInteger(runnerNumber) || runnerNumber < 1 || runnerNumber > 12) {
     return badRequest("Invalid runner_number");
   }
