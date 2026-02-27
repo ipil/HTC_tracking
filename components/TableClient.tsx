@@ -147,22 +147,22 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
         <table>
           <thead>
             <tr>
-              <th>A Runner</th>
-              <th>B Name</th>
-              <th>C Leg</th>
-              <th>D Leg Mileage</th>
-              <th>E Elev Gain</th>
-              <th>F Elev Loss</th>
-              <th>G Net Elev Diff</th>
-              <th>H Estimated Pace</th>
-              <th>I Actual Pace</th>
-              {showInitial ? <th>J Initial Est. Start</th> : null}
-              <th>K Updated Est. Start</th>
-              <th>L Actual Start</th>
-              <th>M Delta vs J</th>
-              <th>N Est. Van Stint</th>
-              <th>O Actual Van Stint</th>
-              <th>P Exchange Location</th>
+              <th data-column="A" title="Column A">Runner</th>
+              <th data-column="B" title="Column B">Name</th>
+              <th data-column="C" title="Column C">Leg</th>
+              <th data-column="D" title="Column D">Leg Mileage</th>
+              <th data-column="E" title="Column E">Elev Gain</th>
+              <th data-column="F" title="Column F">Elev Loss</th>
+              <th data-column="G" title="Column G">Net Elev Diff</th>
+              <th data-column="H" title="Column H">Estimated Pace</th>
+              <th data-column="I" title="Column I">Actual Pace</th>
+              {showInitial ? <th data-column="J" title="Column J">Initial Est. Start</th> : null}
+              <th data-column="K" title="Column K">Updated Est. Start</th>
+              <th data-column="L" title="Column L">Actual Start</th>
+              <th data-column="M" title="Column M">Delta vs J</th>
+              <th data-column="N" title="Column N">Est. Van Stint</th>
+              <th data-column="O" title="Column O">Actual Van Stint</th>
+              <th data-column="P" title="Column P">Exchange Location</th>
             </tr>
           </thead>
           <tbody>
