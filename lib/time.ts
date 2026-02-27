@@ -123,21 +123,26 @@ export function parseLARaceDayTimeToUTCISOString(day: RaceDayKey, time: string):
 
 export function formatUTCISOStringToLARaceDayTime(
   value: string | null
-): { day: RaceDayKey; time: string } {
+): { day: RaceDayKey; hour: string; minute: string; meridiem: "am" | "pm" } {
   if (!value) {
-    return { day: "fri", time: "" };
+    return { day: "fri", hour: "", minute: "", meridiem: "am" };
   }
 
   const parsed = DateTime.fromISO(value, { zone: "utc" }).setZone(LA_TIMEZONE);
   if (!parsed.isValid) {
-    return { day: "fri", time: "" };
+    return { day: "fri", hour: "", minute: "", meridiem: "am" };
   }
 
   const dateKey = parsed.toFormat("yyyy-LL-dd");
   const day = dateKey === RACE_DAY_DATE_MAP.sat ? "sat" : "fri";
+  const hour24 = parsed.hour;
+  const meridiem = hour24 >= 12 ? "pm" : "am";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
 
   return {
     day,
-    time: parsed.toFormat("HH:mm")
+    hour: String(hour12),
+    minute: parsed.toFormat("mm"),
+    meridiem
   };
 }

@@ -22,27 +22,57 @@ export default function RaceDayTimeInput({
 }: Props): React.JSX.Element {
   const initial = formatUTCISOStringToLARaceDayTime(value);
   const [day, setDay] = useState<RaceDayKey>(initial.day);
-  const [time, setTime] = useState(initial.time);
+  const [hour, setHour] = useState(initial.hour);
+  const [minute, setMinute] = useState(initial.minute);
+  const [meridiem, setMeridiem] = useState<"am" | "pm">(initial.meridiem);
 
   useEffect(() => {
     const next = formatUTCISOStringToLARaceDayTime(value);
     setDay(next.day);
-    setTime(next.time);
+    setHour(next.hour);
+    setMinute(next.minute);
+    setMeridiem(next.meridiem);
   }, [value]);
 
-  function nextIso(nextDay: RaceDayKey, nextTime: string): string | null {
-    return parseLARaceDayTimeToUTCISOString(nextDay, nextTime);
+  function nextIso(
+    nextDay: RaceDayKey,
+    nextHour: string,
+    nextMinute: string,
+    nextMeridiem: "am" | "pm"
+  ): string | null {
+    if (!nextHour || !nextMinute) {
+      return null;
+    }
+
+    const hourNum = Number(nextHour);
+    const minuteNum = Number(nextMinute);
+    if (!Number.isInteger(hourNum) || hourNum < 1 || hourNum > 12) {
+      return null;
+    }
+    if (!Number.isInteger(minuteNum) || minuteNum < 0 || minuteNum > 59) {
+      return null;
+    }
+
+    const hour24 =
+      nextMeridiem === "am"
+        ? hourNum % 12
+        : hourNum % 12 === 0
+          ? 12
+          : hourNum + 12;
+
+    const time = `${String(hour24).padStart(2, "0")}:${String(minuteNum).padStart(2, "0")}`;
+    return parseLARaceDayTimeToUTCISOString(nextDay, time);
   }
 
   function commit() {
-    onCommit(nextIso(day, time));
+    onCommit(nextIso(day, hour, minute, meridiem));
   }
 
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "90px minmax(0, 1fr)",
+        gridTemplateColumns: "auto auto auto auto auto auto auto",
         gap: "0.35rem",
         alignItems: "center"
       }}
@@ -52,26 +82,42 @@ export default function RaceDayTimeInput({
         }
       }}
     >
-      <select
-        disabled={disabled}
-        value={day}
-        onChange={(event) => {
-          const nextDay = event.target.value as RaceDayKey;
-          setDay(nextDay);
-          onChange(nextIso(nextDay, time));
-        }}
-      >
-        <option value="fri">Fri.</option>
-        <option value="sat">Sat.</option>
-      </select>
+      <label style={{ display: "inline-flex", gap: "0.2rem", alignItems: "center" }}>
+        <input
+          type="radio"
+          disabled={disabled}
+          checked={day === "fri"}
+          onChange={() => {
+            setDay("fri");
+            onChange(nextIso("fri", hour, minute, meridiem));
+          }}
+        />
+        <span>Fri.</span>
+      </label>
+      <label style={{ display: "inline-flex", gap: "0.2rem", alignItems: "center" }}>
+        <input
+          type="radio"
+          disabled={disabled}
+          checked={day === "sat"}
+          onChange={() => {
+            setDay("sat");
+            onChange(nextIso("sat", hour, minute, meridiem));
+          }}
+        />
+        <span>Sat.</span>
+      </label>
       <input
-        type="time"
+        type="number"
         disabled={disabled}
-        value={time}
+        inputMode="numeric"
+        min="1"
+        max="12"
+        placeholder="hh"
+        value={hour}
         onChange={(event) => {
-          const nextTime = event.target.value;
-          setTime(nextTime);
-          onChange(nextIso(day, nextTime));
+          const nextHour = event.target.value;
+          setHour(nextHour);
+          onChange(nextIso(day, nextHour, minute, meridiem));
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
@@ -79,7 +125,54 @@ export default function RaceDayTimeInput({
             (event.currentTarget as HTMLInputElement).blur();
           }
         }}
+        style={{ width: 56 }}
       />
+      <span className="muted">:</span>
+      <input
+        type="number"
+        disabled={disabled}
+        inputMode="numeric"
+        min="0"
+        max="59"
+        placeholder="mm"
+        value={minute}
+        onChange={(event) => {
+          const nextMinute = event.target.value;
+          setMinute(nextMinute);
+          onChange(nextIso(day, hour, nextMinute, meridiem));
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            commit();
+            (event.currentTarget as HTMLInputElement).blur();
+          }
+        }}
+        style={{ width: 62 }}
+      />
+      <label style={{ display: "inline-flex", gap: "0.2rem", alignItems: "center" }}>
+        <input
+          type="radio"
+          disabled={disabled}
+          checked={meridiem === "am"}
+          onChange={() => {
+            setMeridiem("am");
+            onChange(nextIso(day, hour, minute, "am"));
+          }}
+        />
+        <span>AM</span>
+      </label>
+      <label style={{ display: "inline-flex", gap: "0.2rem", alignItems: "center" }}>
+        <input
+          type="radio"
+          disabled={disabled}
+          checked={meridiem === "pm"}
+          onChange={() => {
+            setMeridiem("pm");
+            onChange(nextIso(day, hour, minute, "pm"));
+          }}
+        />
+        <span>PM</span>
+      </label>
     </div>
   );
 }
