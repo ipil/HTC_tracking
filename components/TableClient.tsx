@@ -144,6 +144,21 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     return Math.round((b - a) / 1000);
   }, [data.finish_time, data.race_start_time]);
 
+  const estimatedFinishTime = useMemo(() => {
+    const lastLeg = data.rows[data.rows.length - 1];
+    if (!lastLeg?.updatedEstimatedStartTime || lastLeg.estimatedPaceSpm === null) {
+      return null;
+    }
+
+    const estimatedStartTs = new Date(lastLeg.updatedEstimatedStartTime).getTime();
+    if (!Number.isFinite(estimatedStartTs)) {
+      return null;
+    }
+
+    const estimatedDurationSec = Math.round(lastLeg.legMileage * lastLeg.estimatedPaceSpm);
+    return new Date(estimatedStartTs + estimatedDurationSec * 1000).toISOString();
+  }, [data.rows]);
+
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
       {!canEdit ? (
@@ -153,7 +168,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       ) : null}
       <section className="panel" style={{ display: "grid", gap: "0.8rem" }}>
         <h2>Race Timing</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, max-content)", gap: "1rem", justifyContent: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, max-content)", gap: "1rem", justifyContent: "start", alignItems: "end" }}>
           <label style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
             <div className="muted">Race Start Time</div>
             <RaceDayTimeInput
@@ -168,8 +183,25 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
             />
           </label>
 
+          <div style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
+            <div className="muted">Estimated Finish Time</div>
+            <div
+              style={{
+                minHeight: 34,
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "0.25rem 0.35rem",
+                border: "1px solid #d4dbd4",
+                borderRadius: 6,
+                background: "#f7faf7"
+              }}
+            >
+              {formatUTCISOStringToLA_friendly(estimatedFinishTime)}
+            </div>
+          </div>
+
           <label style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
-            <div className="muted">Finish Time</div>
+            <div className="muted">Actual Finish Time</div>
             <RaceDayTimeInput
               disabled={!canEdit}
               value={data.finish_time}
