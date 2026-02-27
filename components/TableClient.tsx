@@ -2,13 +2,12 @@
 
 import ImportLegsModal from "@/components/ImportLegsModal";
 import PaceEditor from "@/components/PaceEditor";
+import RaceDayTimeInput from "@/components/RaceDayTimeInput";
 import { getHeatmapStyle, getNextLegIndex, getVanCellStyle } from "@/lib/formatRules";
 import {
   formatSecondsToHMS,
   formatSecondsToPace,
-  formatUTCISOStringToLA_datetimeLocal,
   formatUTCISOStringToLA_friendly,
-  parseLA_datetimeLocalToUTCISOString
 } from "@/lib/time";
 import { useMemo, useState } from "react";
 import type { TableData, TableRow } from "@/types/domain";
@@ -158,16 +157,13 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(220px, 1fr))", gap: "0.7rem" }}>
           <label>
             <div className="muted">Race Start Time</div>
-            <input
-              type="datetime-local"
+            <RaceDayTimeInput
               disabled={!canEdit}
-              value={formatUTCISOStringToLA_datetimeLocal(data.race_start_time)}
-              onChange={(event) => {
-                const iso = parseLA_datetimeLocalToUTCISOString(event.target.value);
+              value={data.race_start_time}
+              onChange={(iso) => {
                 updateConfigLocal({ race_start_time: iso });
               }}
-              onBlur={(event) => {
-                const iso = parseLA_datetimeLocalToUTCISOString(event.target.value);
+              onCommit={(iso) => {
                 void save("/api/config", { race_start_time: iso });
               }}
             />
@@ -175,16 +171,13 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
 
           <label>
             <div className="muted">Finish Time</div>
-            <input
-              type="datetime-local"
+            <RaceDayTimeInput
               disabled={!canEdit}
-              value={formatUTCISOStringToLA_datetimeLocal(data.finish_time)}
-              onChange={(event) => {
-                const iso = parseLA_datetimeLocalToUTCISOString(event.target.value);
+              value={data.finish_time}
+              onChange={(iso) => {
                 updateConfigLocal({ finish_time: iso });
               }}
-              onBlur={(event) => {
-                const iso = parseLA_datetimeLocalToUTCISOString(event.target.value);
+              onCommit={(iso) => {
                 void save("/api/config", { finish_time: iso });
               }}
             />
@@ -321,16 +314,13 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                   ) : null}
                   <td style={getVanCellStyle(row.runnerNumber, "updatedEstimatedStart")}>{formatUTCISOStringToLA_friendly(row.updatedEstimatedStartTime)}</td>
                   <td>
-                    <input
-                      type="datetime-local"
+                    <RaceDayTimeInput
                       disabled={!canEdit}
-                      value={formatUTCISOStringToLA_datetimeLocal(row.actualLegStartTime)}
-                      onChange={(event) => {
-                        const iso = parseLA_datetimeLocalToUTCISOString(event.target.value);
+                      value={row.actualLegStartTime}
+                      onChange={(iso) => {
                         updateRowLocal(row.leg, { actualLegStartTime: iso });
                       }}
-                      onBlur={(event) => {
-                        const iso = parseLA_datetimeLocalToUTCISOString(event.target.value);
+                      onCommit={(iso) => {
                         void save(`/api/leg-inputs/${row.leg}`, { actual_start_time: iso });
                       }}
                     />

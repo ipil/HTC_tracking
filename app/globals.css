@@ -73,7 +73,9 @@ button {
 
 input[type="text"],
 input[type="number"],
-input[type="datetime-local"] {
+input[type="datetime-local"],
+input[type="time"],
+select {
   width: 100%;
   border: 1px solid #d4dbd4;
   border-radius: 6px;

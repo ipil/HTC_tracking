@@ -1,6 +1,12 @@
 import { DateTime } from "luxon";
 
 export const LA_TIMEZONE = "America/Los_Angeles";
+export const RACE_DAY_DATE_MAP = {
+  fri: "2026-08-28",
+  sat: "2026-08-29"
+} as const;
+
+export type RaceDayKey = keyof typeof RACE_DAY_DATE_MAP;
 
 export function formatSecondsToHMS(totalSec: number | null): string {
   if (totalSec === null || Number.isNaN(totalSec)) {
@@ -99,4 +105,39 @@ export function normalizeUTCISOString(value: unknown): string | null {
   }
 
   return null;
+}
+
+export function parseLARaceDayTimeToUTCISOString(day: RaceDayKey, time: string): string | null {
+  if (!time) {
+    return null;
+  }
+
+  const date = RACE_DAY_DATE_MAP[day];
+  const parsed = DateTime.fromISO(`${date}T${time}`, { zone: LA_TIMEZONE });
+  if (!parsed.isValid) {
+    return null;
+  }
+
+  return parsed.toUTC().toISO();
+}
+
+export function formatUTCISOStringToLARaceDayTime(
+  value: string | null
+): { day: RaceDayKey; time: string } {
+  if (!value) {
+    return { day: "fri", time: "" };
+  }
+
+  const parsed = DateTime.fromISO(value, { zone: "utc" }).setZone(LA_TIMEZONE);
+  if (!parsed.isValid) {
+    return { day: "fri", time: "" };
+  }
+
+  const dateKey = parsed.toFormat("yyyy-LL-dd");
+  const day = dateKey === RACE_DAY_DATE_MAP.sat ? "sat" : "fri";
+
+  return {
+    day,
+    time: parsed.toFormat("HH:mm")
+  };
 }
