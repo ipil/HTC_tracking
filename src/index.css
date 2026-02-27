@@ -1,0 +1,337 @@
+:root {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.4;
+  color: #13222f;
+  background: #f1f5f9;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  padding: 16px;
+  background: #ffffff;
+  border-right: 1px solid #d4dbe3;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.control-group {
+  border: 1px solid #d4dbe3;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fbff;
+}
+
+.control-group h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.control-group-copy {
+  margin: 6px 0 10px;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.panel {
+  border: 1px solid #d4dbe3;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fbfdff;
+}
+
+.panel h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.collapsible-panel summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collapsible-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-panel summary::before {
+  content: '▸';
+  font-size: 0.9rem;
+  color: #334155;
+  transform: rotate(0deg);
+  transition: transform 120ms ease;
+}
+
+.collapsible-panel[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.collapsible-panel summary h2 {
+  margin: 0;
+}
+
+.controls-summary {
+  justify-content: space-between;
+}
+
+.collapsible-panel .collapsible-body {
+  margin-top: 8px;
+}
+
+.collapsible-panel:not([open]) .collapsible-body {
+  display: none;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.row label {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.row input,
+.row select {
+  width: 100%;
+}
+
+.row input[type='checkbox'] {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.microcopy {
+  margin: -2px 0 8px;
+  font-size: 0.78rem;
+  color: #475569;
+}
+
+.waves-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wave-card {
+  border: 1px solid #d9e2ec;
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+}
+
+.map-wrap {
+  position: relative;
+  height: 100vh;
+}
+
+.map-pane {
+  position: relative;
+  height: 100vh;
+}
+
+.map-root {
+  width: 100%;
+  height: 100%;
+}
+
+.overlay-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 450;
+  pointer-events: none;
+}
+
+.legend {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 500;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #d4dbe3;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 0.8rem;
+}
+
+.legend-bar {
+  width: 130px;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2b83ba, #abdda4, #fdae61, #d7191c);
+  margin: 4px 0;
+}
+
+.controls-time {
+  font-variant-numeric: tabular-nums;
+}
+
+.quick-start-btn {
+  width: 100%;
+  font-weight: 700;
+  background: #0f766e;
+  color: #fff;
+  border: 1px solid #115e59;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.quick-start-btn:hover {
+  background: #0f8a80;
+}
+
+.onboarding-callout {
+  border: 1px solid #bae6fd;
+  background: #f0f9ff;
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.onboarding-text {
+  font-size: 0.85rem;
+}
+
+.onboarding-btn {
+  flex: 0 0 auto;
+  border: 1px solid #94a3b8;
+  background: #fff;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.floating-controls {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  z-index: 600;
+  width: min(360px, calc(100% - 28px));
+}
+
+.floating-controls .panel {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(2px);
+}
+
+.runner-legend {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 550;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid #d4dbe3;
+  border-radius: 8px;
+  padding: 8px;
+  min-width: 180px;
+}
+
+.runner-legend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.runner-legend-info {
+  pointer-events: auto;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid #94a3b8;
+  background: #fff;
+  color: #334155;
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 0;
+}
+
+.runner-legend-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, hsl(120 70% 45%), hsl(40 85% 52%), hsl(0 85% 48%));
+}
+
+.runner-legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: #334155;
+  margin-top: 4px;
+}
+
+@media (max-width: 960px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 60vh;
+    height: auto;
+    overflow: visible;
+  }
+
+  .sidebar {
+    height: auto;
+    overflow: visible;
+  }
+
+  .map-wrap {
+    height: 60vh;
+  }
+
+  .map-pane {
+    height: 60vh;
+  }
+
+  .map-root {
+    height: 60vh;
+  }
+
+  .floating-controls {
+    bottom: 10px;
+    left: 10px;
+    width: min(360px, calc(100% - 20px));
+  }
+
+  .runner-legend {
+    right: 10px;
+    bottom: 10px;
+    min-width: 160px;
+  }
+}
