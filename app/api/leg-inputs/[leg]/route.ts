@@ -51,6 +51,7 @@ export async function PATCH(
   values.push(leg);
   const query = `update leg_inputs set ${updates.join(", ")} where leg = $${values.length}`;
   await sql.query(query, values);
+  console.info(`[api/leg-inputs] updated leg=${leg}`);
 
   return NextResponse.json({ ok: true });
 }

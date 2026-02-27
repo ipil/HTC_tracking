@@ -3,6 +3,8 @@ import TableClient from "@/components/TableClient";
 import { getTableData } from "@/lib/tableData";
 import { isAdminAuthenticated } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   const [data, isAdmin] = await Promise.all([getTableData(), isAdminAuthenticated()]);
 

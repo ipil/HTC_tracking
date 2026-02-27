@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
 async function seed() {
-  const { sql } = await import("../lib/db.ts");
+  const { sql } = await import("../lib/db");
 
   await sql`
     insert into app_config (id)

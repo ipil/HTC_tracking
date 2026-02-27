@@ -26,22 +26,24 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     return badRequest("No valid fields");
   }
 
-  await sql`insert into app_config (id) values (1) on conflict (id) do nothing`;
+  const result = await sql.query<{
+    id: number;
+    race_start_time: string | null;
+    finish_time: string | null;
+    updated_at: string;
+  }>(
+    `
+      insert into app_config (id, race_start_time, finish_time)
+      values (1, $1, $2)
+      on conflict (id) do update
+      set race_start_time = case when $3 then excluded.race_start_time else app_config.race_start_time end,
+          finish_time = case when $4 then excluded.finish_time else app_config.finish_time end,
+          updated_at = now()
+      returning id, race_start_time::text, finish_time::text, updated_at::text
+    `,
+    [raceStart ?? null, finishTime ?? null, raceStart !== undefined, finishTime !== undefined]
+  );
 
-  const updates: string[] = [];
-  const values: Array<string | null> = [];
-  if (raceStart !== undefined) {
-    values.push(raceStart);
-    updates.push(`race_start_time = $${values.length}`);
-  }
-  if (finishTime !== undefined) {
-    values.push(finishTime);
-    updates.push(`finish_time = $${values.length}`);
-  }
-  updates.push("updated_at = now()");
-
-  const query = `update app_config set ${updates.join(", ")} where id = 1`;
-  await sql.query(query, values);
-
-  return NextResponse.json({ ok: true });
+  console.info("[api/config] updated app_config id=1");
+  return NextResponse.json(result.rows[0]);
 }

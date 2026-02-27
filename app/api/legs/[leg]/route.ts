@@ -48,6 +48,7 @@ export async function PATCH(
   values.push(leg);
   const updateSql = `update legs set ${updates.join(", ")}, updated_at = now() where leg = $${values.length}`;
   await sql.query(updateSql, values);
+  console.info(`[api/legs] updated leg=${leg}`);
 
   return NextResponse.json({ ok: true });
 }

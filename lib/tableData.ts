@@ -19,6 +19,7 @@ type JoinedRow = {
   exchange_label: string;
   exchange_url: string;
   estimated_pace_override_spm: number | null;
+  effective_estimated_pace_spm: number | null;
   actual_start_time: string | null;
 };
 
@@ -58,6 +59,7 @@ export async function getTableData(): Promise<TableData> {
       l.exchange_label,
       l.exchange_url,
       li.estimated_pace_override_spm,
+      coalesce(li.estimated_pace_override_spm, r.default_estimated_pace_spm) as effective_estimated_pace_spm,
       li.actual_start_time::text
     from legs l
     join runners r on r.runner_number = l.runner_number
@@ -68,7 +70,7 @@ export async function getTableData(): Promise<TableData> {
   const sorted = result.rows;
 
   const estimatedDurations = sorted.map((row) => {
-    const pace = row.estimated_pace_override_spm ?? row.default_estimated_pace_spm;
+    const pace = row.effective_estimated_pace_spm;
     if (!pace) {
       return null;
     }
@@ -105,7 +107,7 @@ export async function getTableData(): Promise<TableData> {
       elevGainFt: row.elev_gain_ft,
       elevLossFt: row.elev_loss_ft,
       netElevDiffFt: row.net_elev_diff_ft,
-      estimatedPaceSpm: row.estimated_pace_override_spm ?? row.default_estimated_pace_spm,
+      estimatedPaceSpm: row.effective_estimated_pace_spm,
       estimatedPaceOverrideSpm: row.estimated_pace_override_spm,
       actualPaceSpm,
       initialEstimatedStartTime: initial[idx],

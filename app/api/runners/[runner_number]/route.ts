@@ -53,8 +53,14 @@ export async function PATCH(
   updates.push("updated_at = now()");
   values.push(runnerNumber);
 
-  const query = `update runners set ${updates.join(", ")} where runner_number = $${values.length}`;
-  await sql.query(query, values);
+  const query = `update runners set ${updates.join(", ")} where runner_number = $${values.length} returning runner_number, name, default_estimated_pace_spm, updated_at::text`;
+  const result = await sql.query<{
+    runner_number: number;
+    name: string;
+    default_estimated_pace_spm: number | null;
+    updated_at: string;
+  }>(query, values);
 
-  return NextResponse.json({ ok: true });
+  console.info(`[api/runners] updated runner_number=${runnerNumber}`);
+  return NextResponse.json(result.rows[0]);
 }
