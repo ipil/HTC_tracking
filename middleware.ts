@@ -1,15 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyCookieValue } from "@/lib/cookies";
 
 function isApi(pathname: string): boolean {
   return pathname.startsWith("/api/");
 }
 
 function unauthorizedResponse(pathname: string, request: NextRequest): NextResponse {
-  if (isApi(pathname)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const loginUrl = new URL("/login", request.url);
   return NextResponse.redirect(loginUrl);
 }
@@ -25,20 +20,12 @@ export function middleware(request: NextRequest): NextResponse {
     return NextResponse.next();
   }
 
-  const allowlisted = new Set([
-    "/login",
-    "/admin/login",
-    "/api/auth/login",
-    "/api/auth/admin-login",
-    "/api/auth/logout"
-  ]);
-
   const siteProtected = Boolean(process.env.SITE_PASSWORD);
   const adminProtected = Boolean(process.env.ADMIN_PASSWORD);
 
-  if (siteProtected && !allowlisted.has(pathname)) {
+  if (siteProtected) {
     const siteCookie = request.cookies.get("site_auth")?.value;
-    if (!verifyCookieValue(siteCookie, "1")) {
+    if (!siteCookie) {
       return unauthorizedResponse(pathname, request);
     }
   }
@@ -48,7 +35,7 @@ export function middleware(request: NextRequest): NextResponse {
 
   if (adminProtected && (adminOnlyPath || adminApiPath)) {
     const adminCookie = request.cookies.get("admin_auth")?.value;
-    if (!verifyCookieValue(adminCookie, "1")) {
+    if (!adminCookie) {
       if (isApi(pathname)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
@@ -60,5 +47,5 @@ export function middleware(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|.*\\..*).*)"]
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|login|admin/login|api/auth).*)"]
 };
