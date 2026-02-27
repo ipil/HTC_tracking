@@ -23,6 +23,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const response = NextResponse.json({ ok: true });
+  response.cookies.set("site_auth", "1", {
+    ...cookieBase,
+    ...(domain ? { domain } : {})
+  });
   response.cookies.set("admin_auth", "1", {
     ...cookieBase,
     ...(domain ? { domain } : {})
