@@ -1,13 +1,17 @@
-# Hood to Coast Planner (Next.js + Vercel Postgres)
+# Hood to Coast Planner (Next.js + Neon Postgres)
 
 Production-ready foundation for a collaborative relay-race planning spreadsheet with 36 legs, role-gated editing, persisted state, and relay timing calculations.
 
 ## Stack
 
 - Next.js (App Router) + TypeScript
-- Vercel Postgres (`@vercel/postgres`)
+- Neon serverless driver (`@neondatabase/serverless`)
 - Luxon for timezone-safe LA time conversions
 - Route Handlers for API
+
+Database URL resolution in code:
+- Primary: `POSTGRES_URL`
+- Fallback: `DATABASE_URL`
 
 ## Setup
 
@@ -41,6 +45,7 @@ npm run dev
 1. Push repository.
 2. Import project in Vercel.
 3. Add Postgres integration and env vars (`SITE_PASSWORD`, `ADMIN_PASSWORD`, DB vars, optional `AUTH_COOKIE_SECRET`).
+   - Set `POSTGRES_URL` (recommended in this repo). `DATABASE_URL` is supported as fallback.
 4. Run schema and seed once against production DB.
 5. Deploy.
 
