@@ -1,6 +1,10 @@
-import { sql } from "../lib/db";
+import dotenv from "dotenv";
+
+dotenv.config({ path: ".env.local" });
 
 async function seed() {
+  const { sql } = await import("../lib/db.ts");
+
   await sql`
     insert into app_config (id)
     values (1)
@@ -54,7 +58,12 @@ async function seed() {
   console.log("Seed complete");
 }
 
-seed().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+seed()
+  .then(() => {
+    console.log("✅ Seed complete");
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error("❌ Seed failed:", err);
+    process.exit(1);
+  });
