@@ -52,8 +52,9 @@ export default function PaceEditor({ disabled, value, onSave }: Props): React.JS
   return (
     <div
       style={{
+        width: "fit-content",
         display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr) auto minmax(0, 1fr)",
+        gridTemplateColumns: "auto auto auto",
         gap: "0.25rem",
         alignItems: "center"
       }}
@@ -79,6 +80,7 @@ export default function PaceEditor({ disabled, value, onSave }: Props): React.JS
             (event.currentTarget as HTMLInputElement).blur();
           }
         }}
+        style={{ width: "3.5rem" }}
       />
       <span className="muted">:</span>
       <input
@@ -104,6 +106,7 @@ export default function PaceEditor({ disabled, value, onSave }: Props): React.JS
             (event.currentTarget as HTMLInputElement).blur();
           }
         }}
+        style={{ width: "3.5rem" }}
       />
     </div>
   );
