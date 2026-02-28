@@ -10,7 +10,7 @@ import {
   formatSecondsToPace,
   formatUTCISOStringToLA_friendly,
 } from "@/lib/time";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { TableData, TableRow } from "@/types/domain";
 
 type Props = {
@@ -19,10 +19,71 @@ type Props = {
   canEdit: boolean;
 };
 
+type OfflineOp = {
+  path: string;
+  body: unknown;
+  timestamp: number;
+};
+
+const OFFLINE_OPS_KEY = "htc-offline-ops";
+const TABLE_CACHE_KEY = "htc-table-cache";
+
 export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [data, setData] = useState<TableData>(initialData);
   const [busy, setBusy] = useState(false);
   const [showLegStats, setShowLegStats] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
+  const [pendingOfflineEdits, setPendingOfflineEdits] = useState(0);
+
+  // Load pending ops count on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(OFFLINE_OPS_KEY);
+      if (!raw) {
+        setPendingOfflineEdits(0);
+        return;
+      }
+      const ops = JSON.parse(raw);
+      setPendingOfflineEdits(Array.isArray(ops) ? ops.length : 0);
+    } catch {
+      setPendingOfflineEdits(0);
+    }
+  }, []);
+
+  // Load cached table data (offline support)
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(TABLE_CACHE_KEY);
+      if (cached) {
+        setData(JSON.parse(cached));
+      }
+    } catch {
+      // ignore cache errors
+    }
+  }, []);
+
+  // Persist latest table data locally
+  useEffect(() => {
+    try {
+      localStorage.setItem(TABLE_CACHE_KEY, JSON.stringify(data));
+    } catch {
+      // ignore storage errors
+    }
+  }, [data]);
+
+  // Track offline/online state
+  useEffect(() => {
+    const update = () => setIsOffline(!navigator.onLine);
+
+    update(); // initial value on mount
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
 
   const nextLegIndex = useMemo(() => getNextLegIndex(data.rows), [data.rows]);
 
@@ -38,14 +99,57 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     if (row.leg === 1) {
       return row.actualLegStartTime ?? data.race_start_time;
     }
-
     return row.actualLegStartTime;
   }
 
+  async function patch(path: string, body: unknown): Promise<boolean> {
+    if (!canEdit) return false;
+
+    const res = await fetch(path, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    return res.ok;
+  }
+
+  function readOfflineOps(): OfflineOp[] {
+    try {
+      const raw = localStorage.getItem(OFFLINE_OPS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as OfflineOp[]) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function writeOfflineOps(ops: OfflineOp[]) {
+    try {
+      localStorage.setItem(OFFLINE_OPS_KEY, JSON.stringify(ops));
+      setPendingOfflineEdits(ops.length);
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  function queueOfflineOp(path: string, body: unknown) {
+    const ops = readOfflineOps();
+    ops.push({ path, body, timestamp: Date.now() });
+    writeOfflineOps(ops);
+  }
+
   async function save(path: string, body: unknown) {
-    if (!canEdit) {
+    if (!canEdit) return;
+
+    // OFFLINE → queue locally
+    if (isOffline) {
+      queueOfflineOp(path, body);
       return;
     }
+
+    // ONLINE → patch + refresh once (callers that do batching should avoid save())
     setBusy(true);
     const ok = await patch(path, body);
     if (ok) {
@@ -54,123 +158,211 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     setBusy(false);
   }
 
-  async function patch(path: string, body: unknown): Promise<boolean> {
-    if (!canEdit) {
-      return false;
-    }
-    const res = await fetch(path, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
+  // When back online, replay queued offline edits
+  useEffect(() => {
+    if (isOffline) return;
 
-    if (!res.ok) {
-      return false;
-    }
+    (async () => {
+      const ops = readOfflineOps();
+      if (ops.length === 0) {
+        setPendingOfflineEdits(0);
+        return;
+      }
 
-    return true;
-  }
+      setBusy(true);
+      try {
+        const failed: OfflineOp[] = [];
 
-  function updateRowLocal(leg: number, patch: Partial<TableRow>) {
+        for (const op of ops) {
+          const ok = await patch(op.path, op.body);
+          if (!ok) {
+            failed.push(op);
+          }
+        }
+
+        if (failed.length === 0) {
+          try {
+            localStorage.removeItem(OFFLINE_OPS_KEY);
+          } catch {
+            // ignore
+          }
+          setPendingOfflineEdits(0);
+        } else {
+          writeOfflineOps(failed);
+        }
+
+        await refresh();
+      } catch {
+        // do not erase queue on error
+      } finally {
+        setBusy(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOffline]);
+
+  function updateRowLocal(leg: number, patchObj: Partial<TableRow>) {
     setData((prev) => ({
       ...prev,
-      rows: prev.rows.map((row) => (row.leg === leg ? { ...row, ...patch } : row))
+      rows: prev.rows.map((row) => (row.leg === leg ? { ...row, ...patchObj } : row)),
     }));
   }
 
-  function updateConfigLocal(patch: Partial<TableData>) {
-    setData((prev) => ({ ...prev, ...patch }));
+  function updateConfigLocal(patchObj: Partial<TableData>) {
+    setData((prev) => ({ ...prev, ...patchObj }));
   }
 
   function updateRunnerDefaultLocal(runnerNumber: number, pace: number | null) {
     setData((prev) => ({
       ...prev,
       rows: prev.rows.map((row) => {
-        if (row.runnerNumber !== runnerNumber) {
-          return row;
-        }
+        if (row.runnerNumber !== runnerNumber) return row;
+
         const isFirstLeg = row.leg === runnerNumber;
         const nextOverride = isFirstLeg ? null : row.estimatedPaceOverrideSpm;
         const nextEstimatedPace = nextOverride ?? pace;
+
         return {
           ...row,
           runnerDefaultPaceSpm: pace,
           estimatedPaceOverrideSpm: nextOverride,
           estimatedPaceSpm: nextEstimatedPace,
-          isOverride: nextOverride !== null && nextOverride !== pace
+          isOverride: nextOverride !== null && nextOverride !== pace,
         };
-      })
+      }),
     }));
   }
 
   async function saveEstimatedPace(row: TableRow, value: number | null) {
-    if (!canEdit) {
-      return;
-    }
+    if (!canEdit) return;
+
     setBusy(true);
 
-    if (row.leg <= 12) {
-      updateRunnerDefaultLocal(row.runnerNumber, value);
-      const paceSaved = await patch(`/api/runners/${row.runnerNumber}`, {
-        default_estimated_pace_spm: value
+    // OFFLINE: update UI + queue ops, no refresh
+    if (isOffline) {
+      if (row.leg <= 12) {
+        updateRunnerDefaultLocal(row.runnerNumber, value);
+
+        queueOfflineOp(`/api/runners/${row.runnerNumber}`, {
+          default_estimated_pace_spm: value,
+        });
+
+        if (row.estimatedPaceOverrideSpm !== null) {
+          queueOfflineOp(`/api/leg-inputs/${row.leg}`, {
+            estimated_pace_override_spm: null,
+          });
+        }
+
+        setBusy(false);
+        return;
+      }
+
+      const nextEstimatedPace = value ?? row.runnerDefaultPaceSpm;
+      updateRowLocal(row.leg, {
+        estimatedPaceSpm: nextEstimatedPace,
+        estimatedPaceOverrideSpm: value,
+        isOverride: value !== null && value !== row.runnerDefaultPaceSpm,
       });
 
-      let overrideCleared = true;
-      if (row.estimatedPaceOverrideSpm !== null) {
-        overrideCleared = await patch(`/api/leg-inputs/${row.leg}`, {
-          estimated_pace_override_spm: null
-        });
-      }
+      queueOfflineOp(`/api/leg-inputs/${row.leg}`, { estimated_pace_override_spm: value });
 
-      if (paceSaved && overrideCleared) {
-        await refresh();
-      }
       setBusy(false);
       return;
     }
 
-    const nextEstimatedPace = value ?? row.runnerDefaultPaceSpm;
-    updateRowLocal(row.leg, {
-      estimatedPaceSpm: nextEstimatedPace,
-      estimatedPaceOverrideSpm: value,
-      isOverride: value !== null && value !== row.runnerDefaultPaceSpm
-    });
-    const saved = await patch(`/api/leg-inputs/${row.leg}`, { estimated_pace_override_spm: value });
-    if (saved) {
+    // ONLINE: patch without per-call refresh, then refresh once
+    try {
+      if (row.leg <= 12) {
+        updateRunnerDefaultLocal(row.runnerNumber, value);
+
+        await patch(`/api/runners/${row.runnerNumber}`, {
+          default_estimated_pace_spm: value,
+        });
+
+        if (row.estimatedPaceOverrideSpm !== null) {
+          await patch(`/api/leg-inputs/${row.leg}`, {
+            estimated_pace_override_spm: null,
+          });
+        }
+
+        await refresh();
+        setBusy(false);
+        return;
+      }
+
+      const nextEstimatedPace = value ?? row.runnerDefaultPaceSpm;
+      updateRowLocal(row.leg, {
+        estimatedPaceSpm: nextEstimatedPace,
+        estimatedPaceOverrideSpm: value,
+        isOverride: value !== null && value !== row.runnerDefaultPaceSpm,
+      });
+
+      await patch(`/api/leg-inputs/${row.leg}`, { estimated_pace_override_spm: value });
       await refresh();
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function resetActualStartTimes() {
-    if (!isAdmin || !canEdit || busy) {
-      return;
-    }
+    if (!isAdmin || !canEdit || busy) return;
 
     const confirmed = window.confirm("Clear all Actual Start Time values?");
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     setBusy(true);
-    const results = await Promise.all(
-      data.rows.map((row) =>
-        patch(`/api/leg-inputs/${row.leg}`, {
-          actual_start_time: null
-        })
-      )
-    );
 
-    if (results.every(Boolean)) {
+    // OFFLINE: queue all ops in one shot (no network)
+    if (isOffline) {
+      try {
+        const ops = readOfflineOps();
+        const now = Date.now();
+
+        for (const row of data.rows) {
+          ops.push({
+            path: `/api/leg-inputs/${row.leg}`,
+            body: { actual_start_time: null },
+            timestamp: now,
+          });
+        }
+
+        writeOfflineOps(ops);
+      } catch {
+        // ignore storage errors
+      }
+
+      // Always clear locally right away
       setData((prev) => ({
         ...prev,
         rows: prev.rows.map((row) => ({
           ...row,
-          actualLegStartTime: null
-        }))
+          actualLegStartTime: null,
+        })),
       }));
-      await refresh();
+
+      setBusy(false);
+      return;
     }
+
+    // ONLINE: patch everything, then refresh once
+    await Promise.all(
+      data.rows.map((row) =>
+        patch(`/api/leg-inputs/${row.leg}`, {
+          actual_start_time: null,
+        })
+      )
+    );
+
+    // Clear locally right away, then pull canonical state once
+    setData((prev) => ({
+      ...prev,
+      rows: prev.rows.map((row) => ({
+        ...row,
+        actualLegStartTime: null,
+      })),
+    }));
+
+    await refresh();
 
     setBusy(false);
   }
@@ -208,14 +400,40 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
+      {isOffline || pendingOfflineEdits > 0 ? (
+        <section
+          className="panel"
+          style={{
+            background: "#fff3cd",
+            borderColor: "#d6b94c",
+            fontWeight: 600,
+          }}
+        >
+          {isOffline
+            ? `OFFLINE MODE — ${pendingOfflineEdits} pending edit${pendingOfflineEdits === 1 ? "" : "s"} will sync when connection returns.`
+            : busy
+              ? `SYNCING… applying ${pendingOfflineEdits} pending edit${pendingOfflineEdits === 1 ? "" : "s"}`
+              : `Pending edits: ${pendingOfflineEdits}`}
+        </section>
+      ) : null}
+
       {!canEdit ? (
         <section className="panel" style={{ borderColor: "#7b6a1e", backgroundColor: "#fff8dd" }}>
           <strong>Viewer mode:</strong> editing is disabled until you log in.
         </section>
       ) : null}
+
       <section className="panel" style={{ display: "grid", gap: "0.8rem" }}>
         <h2>Race Timing</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, max-content)", gap: "1rem", justifyContent: "start", alignItems: "end" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, max-content)",
+            gap: "1rem",
+            justifyContent: "start",
+            alignItems: "end",
+          }}
+        >
           <label style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
             <div className="muted">Race Start Time</div>
             <RaceDayTimeInput
@@ -240,7 +458,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                 padding: "0.25rem 0.35rem",
                 border: "1px solid #d4dbd4",
                 borderRadius: 6,
-                background: "#f7faf7"
+                background: "#f7faf7",
               }}
             >
               {formatUTCISOStringToLA_friendly(estimatedFinishTime)}
@@ -261,6 +479,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
             />
           </label>
         </div>
+
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
           <button className="secondary" type="button" onClick={() => setShowLegStats((value) => !value)}>
             {showLegStats ? "Hide" : "Show"} Leg Stats
@@ -275,38 +494,78 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       </section>
 
       <section className="table-wrap">
-        {isAdmin ? <div className="muted" style={{ padding: "0.5rem 0.6rem" }}>Names are edited in the Runners panel (Admin).</div> : null}
+        {isAdmin ? (
+          <div className="muted" style={{ padding: "0.5rem 0.6rem" }}>
+            Names are edited in the Runners panel (Admin).
+          </div>
+        ) : null}
+
         <table>
           <thead>
             <tr>
-              <th data-column="A" title="Column A">Runner</th>
-              <th data-column="B" title="Column B">Name</th>
-              <th data-column="C" title="Column C">Leg</th>
-              {showLegStats ? <th data-column="D" title="Column D">Leg Mileage</th> : null}
-              {showLegStats ? <th data-column="E" title="Column E">Elev Gain</th> : null}
-              {showLegStats ? <th data-column="F" title="Column F">Elev Loss</th> : null}
-              {showLegStats ? <th data-column="G" title="Column G">Net Elev Diff</th> : null}
-              <th data-column="H" title="Column H">Estimated Pace</th>
-              <th data-column="I" title="Column I">Leg Duration at Estimated Pace</th>
-              <th data-column="J" title="Column J">Actual Pace</th>
-              <th data-column="L" title="Column L">Est. Start Time</th>
-              <th data-column="M" title="Column M">Actual Start Time</th>
-              <th data-column="N" title="Column N">Delta to Pre-Race Estimates</th>
-              <th data-column="O" title="Column O">Est. Van Stint Duration</th>
+              <th data-column="A" title="Column A">
+                Runner
+              </th>
+              <th data-column="B" title="Column B">
+                Name
+              </th>
+              <th data-column="C" title="Column C">
+                Leg
+              </th>
+              {showLegStats ? (
+                <th data-column="D" title="Column D">
+                  Leg Mileage
+                </th>
+              ) : null}
+              {showLegStats ? (
+                <th data-column="E" title="Column E">
+                  Elev Gain
+                </th>
+              ) : null}
+              {showLegStats ? (
+                <th data-column="F" title="Column F">
+                  Elev Loss
+                </th>
+              ) : null}
+              {showLegStats ? (
+                <th data-column="G" title="Column G">
+                  Net Elev Diff
+                </th>
+              ) : null}
+              <th data-column="H" title="Column H">
+                Estimated Pace
+              </th>
+              <th data-column="I" title="Column I">
+                Leg Duration at Estimated Pace
+              </th>
+              <th data-column="J" title="Column J">
+                Actual Pace
+              </th>
+              <th data-column="L" title="Column L">
+                Est. Start Time
+              </th>
+              <th data-column="M" title="Column M">
+                Actual Start Time
+              </th>
+              <th data-column="N" title="Column N">
+                Delta to Pre-Race Estimates
+              </th>
+              <th data-column="O" title="Column O">
+                Est. Van Stint Duration
+              </th>
               <th data-column="Q" title="Column Q" style={{ width: "max-content", minWidth: "max-content" }}>
                 Exchange Location
               </th>
             </tr>
           </thead>
+
           <tbody>
             {data.rows.map((row, idx) => {
               const rowClass = idx === nextLegIndex ? "next-leg" : "";
               return (
                 <tr key={row.leg} className={rowClass}>
                   <td style={getVanCellStyle(row.runnerNumber, "runner")}>{row.runnerNumber}</td>
-                  <td style={getVanCellStyle(row.runnerNumber, "name")}>
-                    {row.runnerName}
-                  </td>
+                  <td style={getVanCellStyle(row.runnerNumber, "name")}>{row.runnerName}</td>
                   <td style={getVanCellStyle(row.runnerNumber, "leg")}>{row.leg}</td>
 
                   {showLegStats ? (
@@ -389,7 +648,9 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                   <td style={getVanCellStyle(row.runnerNumber, "estimatedPace")}>
                     <PaceEditor
                       disabled={!canEdit}
-                      value={row.leg <= 12 ? row.runnerDefaultPaceSpm : row.estimatedPaceOverrideSpm ?? row.runnerDefaultPaceSpm}
+                      value={
+                        row.leg <= 12 ? row.runnerDefaultPaceSpm : row.estimatedPaceOverrideSpm ?? row.runnerDefaultPaceSpm
+                      }
                       onSave={(value) => {
                         void saveEstimatedPace(row, value);
                       }}
@@ -398,10 +659,17 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                   </td>
 
                   <td style={getVanCellStyle(row.runnerNumber, "estimatedLegTime")}>
-                    {formatSecondsToHMS(row.estimatedPaceSpm !== null ? Math.round(row.legMileage * row.estimatedPaceSpm) : null)}
+                    {formatSecondsToHMS(
+                      row.estimatedPaceSpm !== null ? Math.round(row.legMileage * row.estimatedPaceSpm) : null
+                    )}
                   </td>
+
                   <td style={getVanCellStyle(row.runnerNumber, "actualPace")}>{formatSecondsToPace(row.actualPaceSpm)}</td>
-                  <td style={getVanCellStyle(row.runnerNumber, "updatedEstimatedStart")}>{formatUTCISOStringToLA_friendly(row.updatedEstimatedStartTime)}</td>
+
+                  <td style={getVanCellStyle(row.runnerNumber, "updatedEstimatedStart")}>
+                    {formatUTCISOStringToLA_friendly(row.updatedEstimatedStartTime)}
+                  </td>
+
                   <td style={getVanCellStyle(row.runnerNumber, "actualStart")}>
                     <RaceDayTimeInput
                       disabled={!canEdit}
@@ -416,8 +684,13 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                       }}
                     />
                   </td>
+
                   <td style={getVanCellStyle(row.runnerNumber, "delta")}>{formatSecondsToHMS(row.deltaToPreRaceSec)}</td>
-                  <td style={getVanCellStyle(row.runnerNumber, "estimatedStint")}>{formatSecondsToHMS(row.estimatedVanStintSec)}</td>
+
+                  <td style={getVanCellStyle(row.runnerNumber, "estimatedStint")}>
+                    {formatSecondsToHMS(row.estimatedVanStintSec)}
+                  </td>
+
                   <td style={{ width: "max-content", minWidth: "max-content" }}>
                     {isAdmin ? (
                       <div style={{ display: "grid", gap: "0.3rem" }}>
