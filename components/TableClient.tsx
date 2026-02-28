@@ -5,6 +5,12 @@ import PaceEditor from "@/components/PaceEditor";
 import RaceDayTimeInput from "@/components/RaceDayTimeInput";
 import { getHeatmapStyle, getNextLegIndex, getVanCellStyle } from "@/lib/formatRules";
 import {
+  computeActualDurations,
+  computeInitialEstimates,
+  computeUpdatedEstimates,
+  computeVanStints,
+} from "@/lib/relayMath";
+import {
   formatUTCISOStringToLARaceDayTime,
   formatSecondsToHMS,
   formatSecondsToPace,
@@ -28,8 +34,87 @@ type OfflineOp = {
 const OFFLINE_OPS_KEY = "htc-offline-ops";
 const TABLE_CACHE_KEY = "htc-table-cache";
 
+function minMax(values: number[]): { min: number; max: number } {
+  if (values.length === 0) return { min: 0, max: 0 };
+  return { min: Math.min(...values), max: Math.max(...values) };
+}
+
+/**
+ * Recompute all derived fields client-side using the same math as getTableData().
+ * This is what enables “Google Sheets-like” cascading updates while offline.
+ */
+function recomputeDerived(input: TableData): TableData {
+  const rows = input.rows;
+
+  const estimatedDurations = rows.map((r) => {
+    const effectivePace = r.estimatedPaceOverrideSpm ?? r.runnerDefaultPaceSpm;
+    if (!effectivePace) return null;
+    return Math.round(r.legMileage * effectivePace);
+  });
+
+  const actualStarts = rows.map((r, idx) => {
+    if (idx === 0) {
+      return r.actualLegStartTime ?? input.race_start_time;
+    }
+    return r.actualLegStartTime;
+  });
+
+  const initial = computeInitialEstimates(input.race_start_time, estimatedDurations);
+  const updated = computeUpdatedEstimates(initial, actualStarts, estimatedDurations);
+  const actualDurations = computeActualDurations(actualStarts, input.finish_time);
+  const stints = computeVanStints(estimatedDurations, actualDurations);
+
+  const nextRows: TableRow[] = rows.map((r, idx) => {
+    const mileage = r.legMileage;
+    const effectiveActualStartTime = actualStarts[idx];
+
+    const actualDuration = actualDurations[idx];
+    const actualPaceSpm = actualDuration !== null && mileage > 0 ? actualDuration / mileage : null;
+
+    let deltaToPreRaceSec: number | null = null;
+    if (effectiveActualStartTime && initial[idx]) {
+      const actualTs = new Date(effectiveActualStartTime).getTime();
+      const initialTs = new Date(initial[idx] ?? "").getTime();
+      if (Number.isFinite(actualTs) && Number.isFinite(initialTs)) {
+        deltaToPreRaceSec = Math.round((actualTs - initialTs) / 1000);
+      }
+    }
+
+    const effectiveEstimatedPace = r.estimatedPaceOverrideSpm ?? r.runnerDefaultPaceSpm;
+
+    const isOverride =
+      r.estimatedPaceOverrideSpm !== null &&
+      r.runnerDefaultPaceSpm !== null &&
+      r.estimatedPaceOverrideSpm !== r.runnerDefaultPaceSpm;
+
+    return {
+      ...r,
+      estimatedPaceSpm: effectiveEstimatedPace,
+      initialEstimatedStartTime: initial[idx],
+      updatedEstimatedStartTime: updated[idx],
+      actualLegStartTime: effectiveActualStartTime,
+      actualPaceSpm,
+      deltaToPreRaceSec,
+      estimatedVanStintSec: stints.estimated[idx],
+      actualVanStintSec: stints.actual[idx],
+      isOverride,
+    };
+  });
+
+  return {
+    ...input,
+    rows: nextRows,
+    heatmap: {
+      mileage: minMax(nextRows.map((r) => r.legMileage)),
+      elevGain: minMax(nextRows.map((r) => r.elevGainFt)),
+      elevLoss: minMax(nextRows.map((r) => r.elevLossFt)),
+      netElevDiff: minMax(nextRows.map((r) => r.netElevDiffFt)),
+    },
+  };
+}
+
 export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
-  const [data, setData] = useState<TableData>(initialData);
+  const [data, setData] = useState<TableData>(() => recomputeDerived(initialData));
   const [busy, setBusy] = useState(false);
   const [showLegStats, setShowLegStats] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
@@ -55,7 +140,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     try {
       const cached = localStorage.getItem(TABLE_CACHE_KEY);
       if (cached) {
-        setData(JSON.parse(cached));
+        const parsed = JSON.parse(cached) as TableData;
+        setData(recomputeDerived(parsed));
       }
     } catch {
       // ignore cache errors
@@ -91,7 +177,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     const res = await fetch("/api/table", { cache: "no-store" });
     if (res.ok) {
       const json = (await res.json()) as TableData;
-      setData(json);
+      setData(recomputeDerived(json));
     }
   }
 
@@ -143,13 +229,13 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   async function save(path: string, body: unknown) {
     if (!canEdit) return;
 
-    // OFFLINE → queue locally
+    // OFFLINE → queue locally (no refresh)
     if (isOffline) {
       queueOfflineOp(path, body);
       return;
     }
 
-    // ONLINE → patch + refresh once (callers that do batching should avoid save())
+    // ONLINE → patch + refresh once
     setBusy(true);
     const ok = await patch(path, body);
     if (ok) {
@@ -175,9 +261,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
 
         for (const op of ops) {
           const ok = await patch(op.path, op.body);
-          if (!ok) {
-            failed.push(op);
-          }
+          if (!ok) failed.push(op);
         }
 
         if (failed.length === 0) {
@@ -202,35 +286,36 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   }, [isOffline]);
 
   function updateRowLocal(leg: number, patchObj: Partial<TableRow>) {
-    setData((prev) => ({
-      ...prev,
-      rows: prev.rows.map((row) => (row.leg === leg ? { ...row, ...patchObj } : row)),
-    }));
+    setData((prev) =>
+      recomputeDerived({
+        ...prev,
+        rows: prev.rows.map((row) => (row.leg === leg ? { ...row, ...patchObj } : row)),
+      })
+    );
   }
 
   function updateConfigLocal(patchObj: Partial<TableData>) {
-    setData((prev) => ({ ...prev, ...patchObj }));
+    setData((prev) => recomputeDerived({ ...prev, ...patchObj }));
   }
 
   function updateRunnerDefaultLocal(runnerNumber: number, pace: number | null) {
-    setData((prev) => ({
-      ...prev,
-      rows: prev.rows.map((row) => {
-        if (row.runnerNumber !== runnerNumber) return row;
+    setData((prev) =>
+      recomputeDerived({
+        ...prev,
+        rows: prev.rows.map((row) => {
+          if (row.runnerNumber !== runnerNumber) return row;
 
-        const isFirstLeg = row.leg === runnerNumber;
-        const nextOverride = isFirstLeg ? null : row.estimatedPaceOverrideSpm;
-        const nextEstimatedPace = nextOverride ?? pace;
+          const isFirstLeg = row.leg === runnerNumber;
+          const nextOverride = isFirstLeg ? null : row.estimatedPaceOverrideSpm;
 
-        return {
-          ...row,
-          runnerDefaultPaceSpm: pace,
-          estimatedPaceOverrideSpm: nextOverride,
-          estimatedPaceSpm: nextEstimatedPace,
-          isOverride: nextOverride !== null && nextOverride !== pace,
-        };
-      }),
-    }));
+          return {
+            ...row,
+            runnerDefaultPaceSpm: pace,
+            estimatedPaceOverrideSpm: nextOverride,
+          };
+        }),
+      })
+    );
   }
 
   async function saveEstimatedPace(row: TableRow, value: number | null) {
@@ -257,11 +342,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
         return;
       }
 
-      const nextEstimatedPace = value ?? row.runnerDefaultPaceSpm;
       updateRowLocal(row.leg, {
-        estimatedPaceSpm: nextEstimatedPace,
         estimatedPaceOverrideSpm: value,
-        isOverride: value !== null && value !== row.runnerDefaultPaceSpm,
       });
 
       queueOfflineOp(`/api/leg-inputs/${row.leg}`, { estimated_pace_override_spm: value });
@@ -290,11 +372,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
         return;
       }
 
-      const nextEstimatedPace = value ?? row.runnerDefaultPaceSpm;
       updateRowLocal(row.leg, {
-        estimatedPaceSpm: nextEstimatedPace,
         estimatedPaceOverrideSpm: value,
-        isOverride: value !== null && value !== row.runnerDefaultPaceSpm,
       });
 
       await patch(`/api/leg-inputs/${row.leg}`, { estimated_pace_override_spm: value });
@@ -312,71 +391,55 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
 
     setBusy(true);
 
-    // OFFLINE: queue all ops in one shot (no network)
+    // OFFLINE: queue all ops in one shot
     if (isOffline) {
       try {
         const ops = readOfflineOps();
         const now = Date.now();
-
-        for (const row of data.rows) {
+        for (const r of data.rows) {
           ops.push({
-            path: `/api/leg-inputs/${row.leg}`,
+            path: `/api/leg-inputs/${r.leg}`,
             body: { actual_start_time: null },
             timestamp: now,
           });
         }
-
         writeOfflineOps(ops);
       } catch {
-        // ignore storage errors
+        // ignore
       }
 
-      // Always clear locally right away
-      setData((prev) => ({
-        ...prev,
-        rows: prev.rows.map((row) => ({
-          ...row,
-          actualLegStartTime: null,
-        })),
-      }));
+      // Clear locally right away (and recompute)
+      setData((prev) =>
+        recomputeDerived({
+          ...prev,
+          rows: prev.rows.map((r) => ({ ...r, actualLegStartTime: null })),
+        })
+      );
 
       setBusy(false);
       return;
     }
 
     // ONLINE: patch everything, then refresh once
-    await Promise.all(
-      data.rows.map((row) =>
-        patch(`/api/leg-inputs/${row.leg}`, {
-          actual_start_time: null,
-        })
-      )
+    await Promise.all(data.rows.map((r) => patch(`/api/leg-inputs/${r.leg}`, { actual_start_time: null })));
+
+    setData((prev) =>
+      recomputeDerived({
+        ...prev,
+        rows: prev.rows.map((r) => ({ ...r, actualLegStartTime: null })),
+      })
     );
 
-    // Clear locally right away, then pull canonical state once
-    setData((prev) => ({
-      ...prev,
-      rows: prev.rows.map((row) => ({
-        ...row,
-        actualLegStartTime: null,
-      })),
-    }));
-
     await refresh();
-
     setBusy(false);
   }
 
   const estimatedFinishTime = useMemo(() => {
     const lastLeg = data.rows[data.rows.length - 1];
-    if (!lastLeg?.updatedEstimatedStartTime || lastLeg.estimatedPaceSpm === null) {
-      return null;
-    }
+    if (!lastLeg?.updatedEstimatedStartTime || lastLeg.estimatedPaceSpm === null) return null;
 
     const estimatedStartTs = new Date(lastLeg.updatedEstimatedStartTime).getTime();
-    if (!Number.isFinite(estimatedStartTs)) {
-      return null;
-    }
+    if (!Number.isFinite(estimatedStartTs)) return null;
 
     const estimatedDurationSec = Math.round(lastLeg.legMileage * lastLeg.estimatedPaceSpm);
     return new Date(estimatedStartTs + estimatedDurationSec * 1000).toISOString();
@@ -649,7 +712,9 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                     <PaceEditor
                       disabled={!canEdit}
                       value={
-                        row.leg <= 12 ? row.runnerDefaultPaceSpm : row.estimatedPaceOverrideSpm ?? row.runnerDefaultPaceSpm
+                        row.leg <= 12
+                          ? row.runnerDefaultPaceSpm
+                          : row.estimatedPaceOverrideSpm ?? row.runnerDefaultPaceSpm
                       }
                       onSave={(value) => {
                         void saveEstimatedPace(row, value);
