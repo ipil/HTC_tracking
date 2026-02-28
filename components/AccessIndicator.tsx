@@ -4,8 +4,8 @@ export type AccessLevel = "viewer" | "team-editor" | "admin";
 
 export async function getAccessLevelFromCookies(): Promise<AccessLevel> {
   const cookieStore = await cookies();
-  const hasAdmin = Boolean(cookieStore.get("admin_auth")?.value);
-  const hasSite = Boolean(cookieStore.get("site_auth")?.value);
+  const hasAdmin = cookieStore.get("admin_auth")?.value === "1";
+  const hasSite = cookieStore.get("site_auth")?.value === "1";
 
   if (hasAdmin) {
     return "admin";

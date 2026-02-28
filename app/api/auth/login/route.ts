@@ -23,23 +23,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const response = NextResponse.json({ ok: true });
   response.cookies.set("site_auth", "1", cookieBase);
-  response.cookies.set("admin_auth", "", {
-    ...cookieBase,
-    maxAge: 0,
-    expires: new Date(0)
-  });
+  response.cookies.set("admin_auth", "0", cookieBase);
   if (isProd) {
-    response.cookies.set("admin_auth", "", {
+    response.cookies.set("admin_auth", "0", {
       ...cookieBase,
-      domain: "klarquist.run",
-      maxAge: 0,
-      expires: new Date(0)
+      domain: "klarquist.run"
     });
-    response.cookies.set("admin_auth", "", {
+    response.cookies.set("admin_auth", "0", {
       ...cookieBase,
-      domain: "www.klarquist.run",
-      maxAge: 0,
-      expires: new Date(0)
+      domain: "www.klarquist.run"
     });
   }
   return response;

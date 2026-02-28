@@ -19,7 +19,7 @@ export function middleware(request: NextRequest): NextResponse {
     }
 
     if (isAdminPage || isAdminApi) {
-      if (!adminCookie) {
+      if (adminCookie !== "1") {
         if (isAdminApi) {
           return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
@@ -28,7 +28,7 @@ export function middleware(request: NextRequest): NextResponse {
       return NextResponse.next();
     }
 
-    if (!siteCookie) {
+    if (siteCookie !== "1") {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
