@@ -7,7 +7,8 @@ function clearCookies(response: NextResponse): NextResponse {
     sameSite: "lax" as const,
     path: "/",
     secure: isProd,
-    maxAge: 0
+    maxAge: 0,
+    expires: new Date(0)
   };
 
   response.cookies.set("site_auth", "", base);
@@ -20,6 +21,14 @@ function clearCookies(response: NextResponse): NextResponse {
     response.cookies.set("admin_auth", "", {
       ...base,
       domain: "klarquist.run"
+    });
+    response.cookies.set("site_auth", "", {
+      ...base,
+      domain: "www.klarquist.run"
+    });
+    response.cookies.set("admin_auth", "", {
+      ...base,
+      domain: "www.klarquist.run"
     });
   }
   return response;
