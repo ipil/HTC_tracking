@@ -5,7 +5,7 @@ function setCookieEverywhere(
   name: string,
   value: string,
   base: {
-    httpOnly: true;
+    httpOnly: boolean;
     sameSite: "lax";
     path: string;
     secure: boolean;
