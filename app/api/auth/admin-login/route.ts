@@ -9,7 +9,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     secure: isProd,
     maxAge: 60 * 60 * 24 * 30
   };
-  const domain = isProd ? "klarquist.run" : undefined;
 
   const expected = process.env.ADMIN_PASSWORD;
   if (!expected) {
@@ -23,13 +22,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const response = NextResponse.json({ ok: true });
-  response.cookies.set("site_auth", "1", {
-    ...cookieBase,
-    ...(domain ? { domain } : {})
-  });
-  response.cookies.set("admin_auth", "1", {
-    ...cookieBase,
-    ...(domain ? { domain } : {})
-  });
+  response.cookies.set("site_auth", "1", cookieBase);
+  response.cookies.set("admin_auth", "1", cookieBase);
   return response;
 }
