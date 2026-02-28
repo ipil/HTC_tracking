@@ -22,6 +22,7 @@ type Props = {
 export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [data, setData] = useState<TableData>(initialData);
   const [busy, setBusy] = useState(false);
+  const [showLegStats, setShowLegStats] = useState(true);
 
   const nextLegIndex = useMemo(() => getNextLegIndex(data.rows), [data.rows]);
 
@@ -133,18 +134,6 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     setBusy(false);
   }
 
-  const totalElapsedSec = useMemo(() => {
-    if (!data.race_start_time || !data.finish_time) {
-      return null;
-    }
-    const a = new Date(data.race_start_time).getTime();
-    const b = new Date(data.finish_time).getTime();
-    if (!Number.isFinite(a) || !Number.isFinite(b)) {
-      return null;
-    }
-    return Math.round((b - a) / 1000);
-  }, [data.finish_time, data.race_start_time]);
-
   const estimatedFinishTime = useMemo(() => {
     const lastLeg = data.rows[data.rows.length - 1];
     if (!lastLeg?.updatedEstimatedStartTime || lastLeg.estimatedPaceSpm === null) {
@@ -230,10 +219,11 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
             />
           </label>
         </div>
-        <div className="muted">Total elapsed: {formatSecondsToHMS(totalElapsedSec)}</div>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <button className="secondary" type="button" onClick={() => setShowLegStats((value) => !value)}>
+            {showLegStats ? "Hide" : "Show"} Leg Stats
+          </button>
           {isAdmin ? <ImportLegsModal onImported={refresh} /> : null}
-          {busy ? <span className="muted">Saving...</span> : null}
         </div>
       </section>
 
@@ -245,18 +235,20 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
               <th data-column="A" title="Column A">Runner</th>
               <th data-column="B" title="Column B">Name</th>
               <th data-column="C" title="Column C">Leg</th>
-              <th data-column="D" title="Column D">Leg Mileage</th>
-              <th data-column="E" title="Column E">Elev Gain</th>
-              <th data-column="F" title="Column F">Elev Loss</th>
-              <th data-column="G" title="Column G">Net Elev Diff</th>
+              {showLegStats ? <th data-column="D" title="Column D">Leg Mileage</th> : null}
+              {showLegStats ? <th data-column="E" title="Column E">Elev Gain</th> : null}
+              {showLegStats ? <th data-column="F" title="Column F">Elev Loss</th> : null}
+              {showLegStats ? <th data-column="G" title="Column G">Net Elev Diff</th> : null}
               <th data-column="H" title="Column H">Estimated Pace</th>
               <th data-column="I" title="Column I">Leg Time at Estimated Pace</th>
               <th data-column="J" title="Column J">Actual Pace</th>
               <th data-column="L" title="Column L">Est. Start Time</th>
               <th data-column="M" title="Column M">Actual Start Time</th>
-              <th data-column="N" title="Column N">Delta vs J</th>
+              <th data-column="N" title="Column N">Delta to Pre-Race Estimates</th>
               <th data-column="O" title="Column O">Est. Van Stint Duration</th>
-              <th data-column="Q" title="Column Q" style={{ width: "1%" }}>Exchange Location</th>
+              <th data-column="Q" title="Column Q" style={{ width: "max-content", minWidth: "max-content" }}>
+                Exchange Location
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -270,74 +262,82 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                   </td>
                   <td style={getVanCellStyle(row.runnerNumber, "leg")}>{row.leg}</td>
 
-                  <td style={getHeatmapStyle("mileage", row.legMileage, data.heatmap.mileage)}>
-                    {isAdmin ? (
-                      <input
-                        type="number"
-                        disabled={!canEdit}
-                        step="0.01"
-                        defaultValue={row.legMileage}
-                        onBlur={(event) => {
-                          const value = Number(event.target.value);
-                          updateRowLocal(row.leg, { legMileage: value });
-                          void save(`/api/legs/${row.leg}`, { leg_mileage: value });
-                        }}
-                      />
-                    ) : (
-                      row.legMileage.toFixed(2)
-                    )}
-                  </td>
+                  {showLegStats ? (
+                    <td style={getHeatmapStyle("mileage", row.legMileage, data.heatmap.mileage)}>
+                      {isAdmin ? (
+                        <input
+                          type="number"
+                          disabled={!canEdit}
+                          step="0.01"
+                          defaultValue={row.legMileage}
+                          onBlur={(event) => {
+                            const value = Number(event.target.value);
+                            updateRowLocal(row.leg, { legMileage: value });
+                            void save(`/api/legs/${row.leg}`, { leg_mileage: value });
+                          }}
+                        />
+                      ) : (
+                        row.legMileage.toFixed(2)
+                      )}
+                    </td>
+                  ) : null}
 
-                  <td style={getHeatmapStyle("elevGain", row.elevGainFt, data.heatmap.elevGain)}>
-                    {isAdmin ? (
-                      <input
-                        type="number"
-                        disabled={!canEdit}
-                        defaultValue={row.elevGainFt}
-                        onBlur={(event) => {
-                          const value = Number(event.target.value);
-                          updateRowLocal(row.leg, { elevGainFt: value });
-                          void save(`/api/legs/${row.leg}`, { elev_gain_ft: value });
-                        }}
-                      />
-                    ) : (
-                      row.elevGainFt
-                    )}
-                  </td>
+                  {showLegStats ? (
+                    <td style={getHeatmapStyle("elevGain", row.elevGainFt, data.heatmap.elevGain)}>
+                      {isAdmin ? (
+                        <input
+                          type="number"
+                          disabled={!canEdit}
+                          defaultValue={row.elevGainFt}
+                          onBlur={(event) => {
+                            const value = Number(event.target.value);
+                            updateRowLocal(row.leg, { elevGainFt: value });
+                            void save(`/api/legs/${row.leg}`, { elev_gain_ft: value });
+                          }}
+                        />
+                      ) : (
+                        row.elevGainFt
+                      )}
+                    </td>
+                  ) : null}
 
-                  <td style={getHeatmapStyle("elevLoss", row.elevLossFt, data.heatmap.elevLoss)}>
-                    {isAdmin ? (
-                      <input
-                        type="number"
-                        disabled={!canEdit}
-                        defaultValue={row.elevLossFt}
-                        onBlur={(event) => {
-                          const value = Number(event.target.value);
-                          updateRowLocal(row.leg, { elevLossFt: value });
-                          void save(`/api/legs/${row.leg}`, { elev_loss_ft: value });
-                        }}
-                      />
-                    ) : (
-                      row.elevLossFt
-                    )}
-                  </td>
+                  {showLegStats ? (
+                    <td style={getHeatmapStyle("elevLoss", row.elevLossFt, data.heatmap.elevLoss)}>
+                      {isAdmin ? (
+                        <input
+                          type="number"
+                          disabled={!canEdit}
+                          defaultValue={row.elevLossFt}
+                          onBlur={(event) => {
+                            const value = Number(event.target.value);
+                            updateRowLocal(row.leg, { elevLossFt: value });
+                            void save(`/api/legs/${row.leg}`, { elev_loss_ft: value });
+                          }}
+                        />
+                      ) : (
+                        row.elevLossFt
+                      )}
+                    </td>
+                  ) : null}
 
-                  <td style={getHeatmapStyle("netElevDiff", row.netElevDiffFt, data.heatmap.netElevDiff)}>
-                    {isAdmin ? (
-                      <input
-                        type="number"
-                        disabled={!canEdit}
-                        defaultValue={row.netElevDiffFt}
-                        onBlur={(event) => {
-                          const value = Number(event.target.value);
-                          updateRowLocal(row.leg, { netElevDiffFt: value });
-                          void save(`/api/legs/${row.leg}`, { net_elev_diff_ft: value });
-                        }}
-                      />
-                    ) : (
-                      row.netElevDiffFt
-                    )}
-                  </td>
+                  {showLegStats ? (
+                    <td style={getHeatmapStyle("netElevDiff", row.netElevDiffFt, data.heatmap.netElevDiff)}>
+                      {isAdmin ? (
+                        <input
+                          type="number"
+                          disabled={!canEdit}
+                          defaultValue={row.netElevDiffFt}
+                          onBlur={(event) => {
+                            const value = Number(event.target.value);
+                            updateRowLocal(row.leg, { netElevDiffFt: value });
+                            void save(`/api/legs/${row.leg}`, { net_elev_diff_ft: value });
+                          }}
+                        />
+                      ) : (
+                        row.netElevDiffFt
+                      )}
+                    </td>
+                  ) : null}
 
                   <td style={getVanCellStyle(row.runnerNumber, "estimatedPace")}>
                     <PaceEditor
@@ -371,7 +371,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                   </td>
                   <td style={getVanCellStyle(row.runnerNumber, "delta")}>{formatSecondsToHMS(row.deltaToPreRaceSec)}</td>
                   <td style={getVanCellStyle(row.runnerNumber, "estimatedStint")}>{formatSecondsToHMS(row.estimatedVanStintSec)}</td>
-                  <td style={{ width: "1%" }}>
+                  <td style={{ width: "max-content", minWidth: "max-content" }}>
                     {isAdmin ? (
                       <div style={{ display: "grid", gap: "0.3rem" }}>
                         <input
