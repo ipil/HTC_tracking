@@ -134,6 +134,39 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     setBusy(false);
   }
 
+  async function resetActualStartTimes() {
+    if (!isAdmin || !canEdit || busy) {
+      return;
+    }
+
+    const confirmed = window.confirm("Clear all Actual Start Time values?");
+    if (!confirmed) {
+      return;
+    }
+
+    setBusy(true);
+    const results = await Promise.all(
+      data.rows.map((row) =>
+        patch(`/api/leg-inputs/${row.leg}`, {
+          actual_start_time: null
+        })
+      )
+    );
+
+    if (results.every(Boolean)) {
+      setData((prev) => ({
+        ...prev,
+        rows: prev.rows.map((row) => ({
+          ...row,
+          actualLegStartTime: null
+        }))
+      }));
+      await refresh();
+    }
+
+    setBusy(false);
+  }
+
   const estimatedFinishTime = useMemo(() => {
     const lastLeg = data.rows[data.rows.length - 1];
     if (!lastLeg?.updatedEstimatedStartTime || lastLeg.estimatedPaceSpm === null) {
@@ -224,6 +257,11 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
             {showLegStats ? "Hide" : "Show"} Leg Stats
           </button>
           {isAdmin ? <ImportLegsModal onImported={refresh} /> : null}
+          {isAdmin ? (
+            <button className="secondary" type="button" onClick={() => void resetActualStartTimes()}>
+              Reset Actual Start Times
+            </button>
+          ) : null}
         </div>
       </section>
 
