@@ -86,7 +86,9 @@ export async function getTableData(): Promise<TableData> {
     return Math.round(mileage * pace);
   });
 
-  const actualStarts = sorted.map((row) => row.actual_start_time);
+  const actualStarts = sorted.map((row, idx) =>
+    idx === 0 ? row.actual_start_time ?? configRow.race_start_time : row.actual_start_time
+  );
   const initial = computeInitialEstimates(configRow.race_start_time, estimatedDurations);
   const updated = computeUpdatedEstimates(initial, actualStarts, estimatedDurations);
   const actualDurations = computeActualDurations(actualStarts, configRow.finish_time);
@@ -96,10 +98,11 @@ export async function getTableData(): Promise<TableData> {
     const mileage = Number(row.leg_mileage);
     const actualDuration = actualDurations[idx];
     const actualPaceSpm = actualDuration !== null && mileage > 0 ? actualDuration / mileage : null;
+    const effectiveActualStartTime = actualStarts[idx];
 
     let deltaToPreRaceSec: number | null = null;
-    if (row.actual_start_time && initial[idx]) {
-      const actualTs = new Date(row.actual_start_time).getTime();
+    if (effectiveActualStartTime && initial[idx]) {
+      const actualTs = new Date(effectiveActualStartTime).getTime();
       const initialTs = new Date(initial[idx] ?? "").getTime();
       if (Number.isFinite(actualTs) && Number.isFinite(initialTs)) {
         deltaToPreRaceSec = Math.round((actualTs - initialTs) / 1000);
@@ -120,7 +123,7 @@ export async function getTableData(): Promise<TableData> {
       actualPaceSpm,
       initialEstimatedStartTime: initial[idx],
       updatedEstimatedStartTime: updated[idx],
-      actualLegStartTime: row.actual_start_time,
+      actualLegStartTime: effectiveActualStartTime,
       deltaToPreRaceSec,
       estimatedVanStintSec: stints.estimated[idx],
       actualVanStintSec: stints.actual[idx],

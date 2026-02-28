@@ -34,6 +34,14 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     }
   }
 
+  function getDisplayedActualStartTime(row: TableRow): string | null {
+    if (row.leg === 1) {
+      return row.actualLegStartTime ?? data.race_start_time;
+    }
+
+    return row.actualLegStartTime;
+  }
+
   async function save(path: string, body: unknown) {
     if (!canEdit) {
       return;
@@ -188,14 +196,15 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
 
     return data.rows.map((row) => {
       const currentDefault = { day, meridiem };
-      if (row.actualLegStartTime) {
-        const parsed = formatUTCISOStringToLARaceDayTime(row.actualLegStartTime);
+      const displayedActualStartTime = getDisplayedActualStartTime(row);
+      if (displayedActualStartTime) {
+        const parsed = formatUTCISOStringToLARaceDayTime(displayedActualStartTime);
         day = parsed.day;
         meridiem = parsed.meridiem;
       }
       return currentDefault;
     });
-  }, [data.rows]);
+  }, [data.race_start_time, data.rows]);
 
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
@@ -278,7 +287,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
               {showLegStats ? <th data-column="F" title="Column F">Elev Loss</th> : null}
               {showLegStats ? <th data-column="G" title="Column G">Net Elev Diff</th> : null}
               <th data-column="H" title="Column H">Estimated Pace</th>
-              <th data-column="I" title="Column I">Leg Time at Estimated Pace</th>
+              <th data-column="I" title="Column I">Leg Duration at Estimated Pace</th>
               <th data-column="J" title="Column J">Actual Pace</th>
               <th data-column="L" title="Column L">Est. Start Time</th>
               <th data-column="M" title="Column M">Actual Start Time</th>
@@ -396,7 +405,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                   <td style={getVanCellStyle(row.runnerNumber, "actualStart")}>
                     <RaceDayTimeInput
                       disabled={!canEdit}
-                      value={row.actualLegStartTime}
+                      value={getDisplayedActualStartTime(row)}
                       defaultDay={actualStartDefaults[idx]?.day}
                       defaultMeridiem={actualStartDefaults[idx]?.meridiem}
                       onChange={(iso) => {
