@@ -1,5 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 
+function setCookieEverywhere(
+  response: NextResponse,
+  name: string,
+  value: string,
+  base: {
+    httpOnly: true;
+    sameSite: "lax";
+    path: string;
+    secure: boolean;
+    maxAge: number;
+  },
+  isProd: boolean
+) {
+  response.cookies.set(name, value, base);
+  if (isProd) {
+    response.cookies.set(name, value, {
+      ...base,
+      domain: "klarquist.run"
+    });
+    response.cookies.set(name, value, {
+      ...base,
+      domain: "www.klarquist.run"
+    });
+  }
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const isProd = process.env.NODE_ENV === "production";
   const cookieBase = {
@@ -22,7 +48,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const response = NextResponse.json({ ok: true });
-  response.cookies.set("site_auth", "1", cookieBase);
-  response.cookies.set("admin_auth", "1", cookieBase);
+  setCookieEverywhere(response, "site_auth", "1", cookieBase, isProd);
+  setCookieEverywhere(response, "admin_auth", "1", cookieBase, isProd);
   return response;
 }

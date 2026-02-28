@@ -1,5 +1,31 @@
 import { NextResponse } from "next/server";
 
+function setCookieEverywhere(
+  response: NextResponse,
+  name: string,
+  value: string,
+  base: {
+    httpOnly: true;
+    sameSite: "lax";
+    path: string;
+    secure: boolean;
+    maxAge: number;
+  },
+  isProd: boolean
+) {
+  response.cookies.set(name, value, base);
+  if (isProd) {
+    response.cookies.set(name, value, {
+      ...base,
+      domain: "klarquist.run"
+    });
+    response.cookies.set(name, value, {
+      ...base,
+      domain: "www.klarquist.run"
+    });
+  }
+}
+
 function clearCookies(response: NextResponse): NextResponse {
   const isProd = process.env.NODE_ENV === "production";
   const base = {
@@ -7,30 +33,11 @@ function clearCookies(response: NextResponse): NextResponse {
     sameSite: "lax" as const,
     path: "/",
     secure: isProd,
-    maxAge: 0,
-    expires: new Date(0)
+    maxAge: 60 * 60 * 24 * 30
   };
 
-  response.cookies.set("site_auth", "", base);
-  response.cookies.set("admin_auth", "", base);
-  if (isProd) {
-    response.cookies.set("site_auth", "", {
-      ...base,
-      domain: "klarquist.run"
-    });
-    response.cookies.set("admin_auth", "", {
-      ...base,
-      domain: "klarquist.run"
-    });
-    response.cookies.set("site_auth", "", {
-      ...base,
-      domain: "www.klarquist.run"
-    });
-    response.cookies.set("admin_auth", "", {
-      ...base,
-      domain: "www.klarquist.run"
-    });
-  }
+  setCookieEverywhere(response, "site_auth", "0", base, isProd);
+  setCookieEverywhere(response, "admin_auth", "0", base, isProd);
   return response;
 }
 
