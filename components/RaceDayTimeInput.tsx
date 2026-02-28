@@ -10,6 +10,8 @@ import {
 type Props = {
   disabled: boolean;
   value: string | null;
+  defaultDay?: RaceDayKey;
+  defaultMeridiem?: "am" | "pm";
   onChange: (value: string | null) => void;
   onCommit: (value: string | null) => void;
 };
@@ -17,22 +19,28 @@ type Props = {
 export default function RaceDayTimeInput({
   disabled,
   value,
+  defaultDay = "fri",
+  defaultMeridiem = "am",
   onChange,
   onCommit
 }: Props): React.JSX.Element {
-  const initial = formatUTCISOStringToLARaceDayTime(value);
+  const initial = value
+    ? formatUTCISOStringToLARaceDayTime(value)
+    : { day: defaultDay, hour: "", minute: "", meridiem: defaultMeridiem };
   const [day, setDay] = useState<RaceDayKey>(initial.day);
   const [hour, setHour] = useState(initial.hour);
   const [minute, setMinute] = useState(initial.minute);
   const [meridiem, setMeridiem] = useState<"am" | "pm">(initial.meridiem);
 
   useEffect(() => {
-    const next = formatUTCISOStringToLARaceDayTime(value);
+    const next = value
+      ? formatUTCISOStringToLARaceDayTime(value)
+      : { day: defaultDay, hour: "", minute: "", meridiem: defaultMeridiem };
     setDay(next.day);
     setHour(next.hour);
     setMinute(next.minute);
     setMeridiem(next.meridiem);
-  }, [value]);
+  }, [defaultDay, defaultMeridiem, value]);
 
   function nextIso(
     nextDay: RaceDayKey,

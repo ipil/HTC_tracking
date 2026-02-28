@@ -5,6 +5,7 @@ import PaceEditor from "@/components/PaceEditor";
 import RaceDayTimeInput from "@/components/RaceDayTimeInput";
 import { getHeatmapStyle, getNextLegIndex, getVanCellStyle } from "@/lib/formatRules";
 import {
+  formatUTCISOStringToLARaceDayTime,
   formatSecondsToHMS,
   formatSecondsToPace,
   formatUTCISOStringToLA_friendly,
@@ -159,6 +160,21 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     return new Date(estimatedStartTs + estimatedDurationSec * 1000).toISOString();
   }, [data.rows]);
 
+  const actualStartDefaults = useMemo(() => {
+    let day: "fri" | "sat" = "fri";
+    let meridiem: "am" | "pm" = "am";
+
+    return data.rows.map((row) => {
+      const currentDefault = { day, meridiem };
+      if (row.actualLegStartTime) {
+        const parsed = formatUTCISOStringToLARaceDayTime(row.actualLegStartTime);
+        day = parsed.day;
+        meridiem = parsed.meridiem;
+      }
+      return currentDefault;
+    });
+  }, [data.rows]);
+
   return (
     <div style={{ display: "grid", gap: "1rem" }}>
       {!canEdit ? (
@@ -239,8 +255,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
               <th data-column="L" title="Column L">Est. Start Time</th>
               <th data-column="M" title="Column M">Actual Start Time</th>
               <th data-column="N" title="Column N">Delta vs J</th>
-              <th data-column="O" title="Column O">Est. Van Stint</th>
-              <th data-column="P" title="Column P">Actual Van Stint</th>
+              <th data-column="O" title="Column O">Est. Van Stint Duration</th>
               <th data-column="Q" title="Column Q" style={{ width: "1%" }}>Exchange Location</th>
             </tr>
           </thead>
@@ -344,6 +359,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                     <RaceDayTimeInput
                       disabled={!canEdit}
                       value={row.actualLegStartTime}
+                      defaultDay={actualStartDefaults[idx]?.day}
+                      defaultMeridiem={actualStartDefaults[idx]?.meridiem}
                       onChange={(iso) => {
                         updateRowLocal(row.leg, { actualLegStartTime: iso });
                       }}
@@ -354,7 +371,6 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                   </td>
                   <td style={getVanCellStyle(row.runnerNumber, "delta")}>{formatSecondsToHMS(row.deltaToPreRaceSec)}</td>
                   <td style={getVanCellStyle(row.runnerNumber, "estimatedStint")}>{formatSecondsToHMS(row.estimatedVanStintSec)}</td>
-                  <td style={getVanCellStyle(row.runnerNumber, "actualStint")}>{formatSecondsToHMS(row.actualVanStintSec)}</td>
                   <td style={{ width: "1%" }}>
                     {isAdmin ? (
                       <div style={{ display: "grid", gap: "0.3rem" }}>
