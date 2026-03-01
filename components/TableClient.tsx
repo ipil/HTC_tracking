@@ -16,7 +16,7 @@ import {
   formatSecondsToPace,
   formatUTCISOStringToLA_friendly,
 } from "@/lib/time";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { TableData, TableRow } from "@/types/domain";
 
 type Props = {
@@ -120,6 +120,26 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [isOffline, setIsOffline] = useState(false);
   const [pendingOfflineEdits, setPendingOfflineEdits] = useState(0);
 
+  // Keep a ref of the latest data so we can flush it during pagehide/visibilitychange.
+  const dataRef = useRef<TableData>(data);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
+  function cacheTable(next: TableData) {
+    try {
+      localStorage.setItem(TABLE_CACHE_KEY, JSON.stringify(next));
+    } catch {
+      // ignore storage errors
+    }
+  }
+
+  function setDataAndCache(next: TableData) {
+    dataRef.current = next;
+    setData(next);
+    cacheTable(next); // write-through so we don't lose "last edit" on fast refresh
+  }
+
   // Load pending ops count on mount
   useEffect(() => {
     try {
@@ -145,21 +165,38 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       const cached = localStorage.getItem(TABLE_CACHE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached) as TableData;
-        setData(recomputeDerived(parsed));
+        setDataAndCache(recomputeDerived(parsed));
       }
     } catch {
       // ignore cache errors
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist latest table data locally
+  // Extra safety: flush cache when tab/app is backgrounded or navigated away (mobile Safari especially)
   useEffect(() => {
-    try {
-      localStorage.setItem(TABLE_CACHE_KEY, JSON.stringify(data));
-    } catch {
-      // ignore storage errors
-    }
-  }, [data]);
+    const flush = () => {
+      try {
+        localStorage.setItem(TABLE_CACHE_KEY, JSON.stringify(dataRef.current));
+      } catch {
+        // ignore
+      }
+    };
+
+    const onVis = () => {
+      if (document.visibilityState === "hidden") {
+        flush();
+      }
+    };
+
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
 
   // Track offline/online state
   useEffect(() => {
@@ -193,7 +230,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     const res = await fetch("/api/table", { cache: "no-store" });
     if (res.ok) {
       const json = (await res.json()) as TableData;
-      setData(recomputeDerived(json));
+      setDataAndCache(recomputeDerived(json));
     }
   }
 
@@ -302,36 +339,35 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   }, [isOffline]);
 
   function updateRowLocal(leg: number, patchObj: Partial<TableRow>) {
-    setData((prev) =>
-      recomputeDerived({
-        ...prev,
-        rows: prev.rows.map((row) => (row.leg === leg ? { ...row, ...patchObj } : row)),
-      })
-    );
+    const next = recomputeDerived({
+      ...dataRef.current,
+      rows: dataRef.current.rows.map((row) => (row.leg === leg ? { ...row, ...patchObj } : row)),
+    });
+    setDataAndCache(next);
   }
 
   function updateConfigLocal(patchObj: Partial<TableData>) {
-    setData((prev) => recomputeDerived({ ...prev, ...patchObj }));
+    const next = recomputeDerived({ ...dataRef.current, ...patchObj });
+    setDataAndCache(next);
   }
 
   function updateRunnerDefaultLocal(runnerNumber: number, pace: number | null) {
-    setData((prev) =>
-      recomputeDerived({
-        ...prev,
-        rows: prev.rows.map((row) => {
-          if (row.runnerNumber !== runnerNumber) return row;
+    const next = recomputeDerived({
+      ...dataRef.current,
+      rows: dataRef.current.rows.map((row) => {
+        if (row.runnerNumber !== runnerNumber) return row;
 
-          const isFirstLeg = row.leg === runnerNumber;
-          const nextOverride = isFirstLeg ? null : row.estimatedPaceOverrideSpm;
+        const isFirstLeg = row.leg === runnerNumber;
+        const nextOverride = isFirstLeg ? null : row.estimatedPaceOverrideSpm;
 
-          return {
-            ...row,
-            runnerDefaultPaceSpm: pace,
-            estimatedPaceOverrideSpm: nextOverride,
-          };
-        }),
-      })
-    );
+        return {
+          ...row,
+          runnerDefaultPaceSpm: pace,
+          estimatedPaceOverrideSpm: nextOverride,
+        };
+      }),
+    });
+    setDataAndCache(next);
   }
 
   async function saveEstimatedPace(row: TableRow, value: number | null) {
@@ -412,7 +448,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       try {
         const ops = readOfflineOps();
         const now = Date.now();
-        for (const r of data.rows) {
+        for (const r of dataRef.current.rows) {
           ops.push({
             path: `/api/leg-inputs/${r.leg}`,
             body: { actual_start_time: null },
@@ -425,26 +461,26 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       }
 
       // Clear locally right away (and recompute)
-      setData((prev) =>
-        recomputeDerived({
-          ...prev,
-          rows: prev.rows.map((r) => ({ ...r, actualLegStartTime: null })),
-        })
-      );
+      const next = recomputeDerived({
+        ...dataRef.current,
+        rows: dataRef.current.rows.map((r) => ({ ...r, actualLegStartTime: null })),
+      });
+      setDataAndCache(next);
 
       setBusy(false);
       return;
     }
 
     // ONLINE: patch everything, then refresh once
-    await Promise.all(data.rows.map((r) => patch(`/api/leg-inputs/${r.leg}`, { actual_start_time: null })));
-
-    setData((prev) =>
-      recomputeDerived({
-        ...prev,
-        rows: prev.rows.map((r) => ({ ...r, actualLegStartTime: null })),
-      })
+    await Promise.all(
+      dataRef.current.rows.map((r) => patch(`/api/leg-inputs/${r.leg}`, { actual_start_time: null }))
     );
+
+    const next = recomputeDerived({
+      ...dataRef.current,
+      rows: dataRef.current.rows.map((r) => ({ ...r, actualLegStartTime: null })),
+    });
+    setDataAndCache(next);
 
     await refresh();
     setBusy(false);
@@ -578,10 +614,10 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
             Names are edited in the Runners panel (Admin).
           </div>
         ) : null}
-
-        <table>
-          <thead>
-            <tr>
+        <div className="sheet-scroll">
+          <table>
+            <thead>
+              <tr>
               <th data-column="A" title="Column A">
                 Runner
               </th>
@@ -635,14 +671,14 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
               <th data-column="Q" title="Column Q" style={{ width: "max-content", minWidth: "max-content" }}>
                 Exchange Location
               </th>
-            </tr>
-          </thead>
+              </tr>
+            </thead>
 
-          <tbody>
-            {data.rows.map((row, idx) => {
-              const rowClass = idx === nextLegIndex ? "next-leg" : "";
-              return (
-                <tr key={row.leg} className={rowClass}>
+            <tbody>
+              {data.rows.map((row, idx) => {
+                const rowClass = idx === nextLegIndex ? "next-leg" : "";
+                return (
+                  <tr key={row.leg} className={rowClass}>
                   <td style={getVanCellStyle(row.runnerNumber, "runner")}>{row.runnerNumber}</td>
                   <td style={getVanCellStyle(row.runnerNumber, "name")}>{row.runnerName}</td>
                   <td style={getVanCellStyle(row.runnerNumber, "leg")}>{row.leg}</td>
@@ -836,11 +872,12 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                       </a>
                     )}
                   </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

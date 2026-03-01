@@ -40,10 +40,13 @@ h3 {
 
 .table-wrap {
   position: relative;
-  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: white;
+}
+
+.sheet-scroll {
+  overflow-x: auto;
 }
 
 table {
