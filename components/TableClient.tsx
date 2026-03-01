@@ -175,6 +175,18 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     };
   }, []);
 
+  useEffect(() => {
+    const handler = (event: BeforeUnloadEvent) => {
+      if (busy || pendingOfflineEdits > 0) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [busy, pendingOfflineEdits]);
+
   const nextLegIndex = useMemo(() => getNextLegIndex(data.rows), [data.rows]);
 
   async function refresh() {
@@ -642,11 +654,18 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                           type="number"
                           disabled={!canEdit}
                           step="0.01"
-                          defaultValue={row.legMileage}
+                          value={Number.isFinite(row.legMileage) ? row.legMileage : 0}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            if (Number.isFinite(value)) {
+                              updateRowLocal(row.leg, { legMileage: value });
+                            }
+                          }}
                           onBlur={(event) => {
                             const value = Number(event.target.value);
-                            updateRowLocal(row.leg, { legMileage: value });
-                            void save(`/api/legs/${row.leg}`, { leg_mileage: value });
+                            if (Number.isFinite(value)) {
+                              void save(`/api/legs/${row.leg}`, { leg_mileage: value });
+                            }
                           }}
                         />
                       ) : (
@@ -661,11 +680,18 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                         <input
                           type="number"
                           disabled={!canEdit}
-                          defaultValue={row.elevGainFt}
+                          value={Number.isFinite(row.elevGainFt) ? row.elevGainFt : 0}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            if (Number.isFinite(value)) {
+                              updateRowLocal(row.leg, { elevGainFt: value });
+                            }
+                          }}
                           onBlur={(event) => {
                             const value = Number(event.target.value);
-                            updateRowLocal(row.leg, { elevGainFt: value });
-                            void save(`/api/legs/${row.leg}`, { elev_gain_ft: value });
+                            if (Number.isFinite(value)) {
+                              void save(`/api/legs/${row.leg}`, { elev_gain_ft: value });
+                            }
                           }}
                         />
                       ) : (
@@ -680,11 +706,18 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                         <input
                           type="number"
                           disabled={!canEdit}
-                          defaultValue={row.elevLossFt}
+                          value={Number.isFinite(row.elevLossFt) ? row.elevLossFt : 0}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            if (Number.isFinite(value)) {
+                              updateRowLocal(row.leg, { elevLossFt: value });
+                            }
+                          }}
                           onBlur={(event) => {
                             const value = Number(event.target.value);
-                            updateRowLocal(row.leg, { elevLossFt: value });
-                            void save(`/api/legs/${row.leg}`, { elev_loss_ft: value });
+                            if (Number.isFinite(value)) {
+                              void save(`/api/legs/${row.leg}`, { elev_loss_ft: value });
+                            }
                           }}
                         />
                       ) : (
@@ -699,11 +732,18 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                         <input
                           type="number"
                           disabled={!canEdit}
-                          defaultValue={row.netElevDiffFt}
+                          value={Number.isFinite(row.netElevDiffFt) ? row.netElevDiffFt : 0}
+                          onChange={(event) => {
+                            const value = Number(event.target.value);
+                            if (Number.isFinite(value)) {
+                              updateRowLocal(row.leg, { netElevDiffFt: value });
+                            }
+                          }}
                           onBlur={(event) => {
                             const value = Number(event.target.value);
-                            updateRowLocal(row.leg, { netElevDiffFt: value });
-                            void save(`/api/legs/${row.leg}`, { net_elev_diff_ft: value });
+                            if (Number.isFinite(value)) {
+                              void save(`/api/legs/${row.leg}`, { net_elev_diff_ft: value });
+                            }
                           }}
                         />
                       ) : (
@@ -766,20 +806,26 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                         <input
                           type="text"
                           disabled={!canEdit}
-                          defaultValue={row.exchangeLabel}
-                          onBlur={(event) => {
+                          value={row.exchangeLabel || ""}
+                          onChange={(event) => {
                             const value = event.target.value;
                             updateRowLocal(row.leg, { exchangeLabel: value });
+                          }}
+                          onBlur={(event) => {
+                            const value = event.target.value;
                             void save(`/api/legs/${row.leg}`, { exchange_label: value });
                           }}
                         />
                         <input
                           type="text"
                           disabled={!canEdit}
-                          defaultValue={row.exchangeUrl}
-                          onBlur={(event) => {
+                          value={row.exchangeUrl || ""}
+                          onChange={(event) => {
                             const value = event.target.value;
                             updateRowLocal(row.leg, { exchangeUrl: value });
+                          }}
+                          onBlur={(event) => {
+                            const value = event.target.value;
                             void save(`/api/legs/${row.leg}`, { exchange_url: value });
                           }}
                         />
