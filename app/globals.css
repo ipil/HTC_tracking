@@ -39,6 +39,7 @@ h3 {
 }
 
 .table-wrap {
+  position: relative;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -64,7 +65,8 @@ th {
   position: sticky;
   top: 0;
   background: #f2f5f1;
-  z-index: 1;
+  z-index: 3;
+  box-shadow: 0 1px 0 #d7ddd7;
 }
 
 input,

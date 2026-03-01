@@ -49,8 +49,9 @@ export function getHeatmapStyle(
   }
 
   if (column === "netElevDiff") {
-    const mid = (stat.min + stat.max) / 2;
-    backgroundColor = threeStopGradient(value, stat.min, mid, stat.max, [183, 225, 205], [255, 255, 255], [245, 178, 178]);
+    const min = Math.min(stat.min, 0);
+    const max = Math.max(stat.max, 0);
+    backgroundColor = threeStopGradient(value, min, 0, max, [183, 225, 205], [255, 255, 255], [245, 178, 178]);
   }
 
   return { backgroundColor };

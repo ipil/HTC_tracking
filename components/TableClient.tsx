@@ -507,10 +507,10 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, max-content)",
-            gap: "1rem",
+            gridTemplateColumns: "max-content",
+            gap: "0.85rem",
             justifyContent: "start",
-            alignItems: "end",
+            alignItems: "start",
           }}
         >
           <label style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
