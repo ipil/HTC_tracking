@@ -49,7 +49,8 @@ h3 {
 table {
   width: max-content;
   min-width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.87rem;
 }
 
