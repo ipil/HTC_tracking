@@ -135,8 +135,12 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     }
   }, []);
 
-  // Load cached table data (offline support)
+  // Load cached table data ONLY when offline (so we don't overwrite fresh server data)
   useEffect(() => {
+    if (navigator.onLine) {
+      return;
+    }
+
     try {
       const cached = localStorage.getItem(TABLE_CACHE_KEY);
       if (cached) {
