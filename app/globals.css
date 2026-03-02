@@ -46,7 +46,9 @@ h3 {
 }
 
 .sheet-scroll {
-  overflow-x: auto;
+  position: relative;
+  overflow: auto;
+  max-height: calc(100vh - 240px);
 }
 
 table {
@@ -69,8 +71,8 @@ th {
   position: sticky;
   top: 0;
   background: #f2f5f1;
-  z-index: 3;
-  box-shadow: 0 1px 0 #d7ddd7;
+  z-index: 20;
+  box-shadow: 0 2px 0 #d7ddd7, 0 4px 8px rgba(27, 31, 29, 0.04);
 }
 
 input,
