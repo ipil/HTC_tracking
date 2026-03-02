@@ -128,6 +128,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [busy, setBusy] = useState(false);
   const [showLegStats, setShowLegStats] = useState(true);
   const [showRaceTiming, setShowRaceTiming] = useState(true);
+  const [showLiveRaceStatus, setShowLiveRaceStatus] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
   const [pendingOfflineEdits, setPendingOfflineEdits] = useState(0);
   const [walCount, setWalCount] = useState(0);
@@ -981,47 +982,64 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     <div ref={tableRootRef} style={{ display: "grid", gap: "1rem" }}>
       {liveVanStatus ? (
         <section className="panel" style={{ display: "grid", gap: "0.65rem" }}>
-          <div style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.04em", color: "#5c665f" }}>
-            {liveVanStatus.raceStarted ? "NOW RUNNING" : "RACE NOT STARTED"}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <button
+              className="secondary"
+              type="button"
+              aria-label={showLiveRaceStatus ? "Collapse live race status" : "Expand live race status"}
+              onClick={() => setShowLiveRaceStatus((value) => !value)}
+              style={{ padding: "0.15rem 0.45rem", lineHeight: 1 }}
+            >
+              {showLiveRaceStatus ? "\u25be" : "\u25b8"}
+            </button>
+            <h2>Live Race Status</h2>
           </div>
-          <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>
-            Runner {liveVanStatus.currentRow.runnerNumber}
-            {liveVanStatus.currentRow.runnerName ? ` — ${liveVanStatus.currentRow.runnerName}` : ""}
-          </div>
-          <div style={{ fontSize: "1rem" }}>
-            <strong>Active:</strong> {liveVanStatus.activeVan}
-          </div>
-          <div style={{ display: "grid", gap: "0.2rem" }}>
-            <div style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.04em", color: "#5c665f" }}>
-              NEXT EXCHANGE
-            </div>
-            <div style={{ fontSize: "1rem" }}>
-              {liveVanStatus.isFinalLeg
-                ? "Final Leg — Heading to Finish"
-                : liveVanStatus.currentRow.exchangeLabel || "—"}
-            </div>
-            {!liveVanStatus.isFinalLeg && liveVanStatus.currentRow.exchangeUrl ? (
-              <div>
-                <a href={liveVanStatus.currentRow.exchangeUrl} target="_blank" rel="noreferrer">
-                  Navigate →
-                </a>
+
+          {showLiveRaceStatus ? (
+            <>
+              <div style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.04em", color: "#5c665f" }}>
+                {liveVanStatus.raceStarted ? "NOW RUNNING" : "RACE NOT STARTED"}
               </div>
-            ) : null}
-          </div>
-          <div style={{ display: "grid", gap: "0.35rem" }}>
-            <div>
-              <strong>ETA</strong>
-            </div>
-            <div style={{ fontSize: "1rem" }}>{formatUTCISOStringToLA_friendly(liveVanStatus.etaIso)}</div>
-          </div>
-          <div style={{ display: "grid", gap: "0.35rem" }}>
-            <div>
-              <strong>In</strong>
-            </div>
-            <div style={{ fontSize: "1.1rem", fontVariantNumeric: "tabular-nums" }}>
-              {formatSecondsToHMS(liveVanStatus.countdownSec)}
-            </div>
-          </div>
+              <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>
+                Runner {liveVanStatus.currentRow.runnerNumber}
+                {liveVanStatus.currentRow.runnerName ? ` — ${liveVanStatus.currentRow.runnerName}` : ""}
+              </div>
+              <div style={{ fontSize: "1rem" }}>
+                <strong>Active:</strong> {liveVanStatus.activeVan}
+              </div>
+              <div style={{ display: "grid", gap: "0.2rem" }}>
+                <div style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.04em", color: "#5c665f" }}>
+                  NEXT EXCHANGE
+                </div>
+                <div style={{ fontSize: "1rem" }}>
+                  {liveVanStatus.isFinalLeg
+                    ? "Final Leg — Heading to Finish"
+                    : liveVanStatus.currentRow.exchangeLabel || "—"}
+                </div>
+                {!liveVanStatus.isFinalLeg && liveVanStatus.currentRow.exchangeUrl ? (
+                  <div>
+                    <a href={liveVanStatus.currentRow.exchangeUrl} target="_blank" rel="noreferrer">
+                      Navigate →
+                    </a>
+                  </div>
+                ) : null}
+              </div>
+              <div style={{ display: "grid", gap: "0.35rem" }}>
+                <div>
+                  <strong>ETA</strong>
+                </div>
+                <div style={{ fontSize: "1rem" }}>{formatUTCISOStringToLA_friendly(liveVanStatus.etaIso)}</div>
+              </div>
+              <div style={{ display: "grid", gap: "0.35rem" }}>
+                <div>
+                  <strong>In</strong>
+                </div>
+                <div style={{ fontSize: "1.1rem", fontVariantNumeric: "tabular-nums" }}>
+                  {formatSecondsToHMS(liveVanStatus.countdownSec)}
+                </div>
+              </div>
+            </>
+          ) : null}
         </section>
       ) : null}
 
