@@ -163,6 +163,19 @@ export default function TableClient({
   canEdit,
   accessLevel,
 }: Props) {
+  const stickyNameHeaderStyle = {
+    position: "sticky" as const,
+    left: 0,
+    zIndex: 30,
+    background: "#f2f5f1",
+    boxShadow: "2px 0 0 #d7ddd7"
+  };
+  const stickyNameCellBaseStyle = {
+    position: "sticky" as const,
+    left: 0,
+    zIndex: 12,
+    boxShadow: "2px 0 0 #d7ddd7"
+  };
   const [data, setData] = useState<TableData>(() => recomputeDerived(initialData));
   const [viewMode, setViewMode] = useState<"race" | "plan" | "runner-stats">("plan");
   const [busy, setBusy] = useState(false);
@@ -1524,7 +1537,7 @@ export default function TableClient({
               <th data-column="A" title="Column A">
                 Runner
               </th>
-              <th data-column="B" title="Column B">
+              <th data-column="B" title="Column B" style={stickyNameHeaderStyle}>
                 Name
               </th>
               <th data-column="C" title="Column C">
@@ -1583,7 +1596,7 @@ export default function TableClient({
                 return (
                   <tr key={row.leg} className={rowClass}>
                   <td style={getVanCellStyle(row.runnerNumber, "runner")}>{row.runnerNumber}</td>
-                  <td style={getVanCellStyle(row.runnerNumber, "name")}>{row.runnerName}</td>
+                  <td style={{ ...stickyNameCellBaseStyle, ...getVanCellStyle(row.runnerNumber, "name") }}>{row.runnerName}</td>
                   <td style={getVanCellStyle(row.runnerNumber, "leg")}>{row.leg}</td>
 
                   {showLegStats ? (
