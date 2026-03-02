@@ -10,10 +10,10 @@ export async function GET(req: NextRequest): Promise<Response> {
   const encoder = new TextEncoder();
   const connectionString = getConnectionString();
   const pool = new Pool({ connectionString });
+  type PgNotification = { channel: string; payload?: string | null };
 
-  let client: Awaited<ReturnType<typeof pool.connect>> | null = null;
+  let client: any = null;
   let pingTimer: ReturnType<typeof setInterval> | null = null;
-  let notificationHandler: ((msg: { payload?: string | null }) => void) | null = null;
   let closed = false;
 
   const stream = new ReadableStream<Uint8Array>({
@@ -22,6 +22,10 @@ export async function GET(req: NextRequest): Promise<Response> {
         if (!closed) {
           controller.enqueue(encoder.encode(chunk));
         }
+      };
+      const onNotification = (msg: PgNotification) => {
+        const payload = msg.payload ?? JSON.stringify({ type: "table_changed", at: Date.now() });
+        write(`event: update\ndata: ${payload}\n\n`);
       };
 
       const cleanup = async () => {
@@ -40,12 +44,15 @@ export async function GET(req: NextRequest): Promise<Response> {
         }
 
         try {
-          if (client && notificationHandler) {
-            client.removeListener("notification", notificationHandler);
+          const c: any = client as any;
+          if (c?.off) {
+            c.off("notification", onNotification);
+          } else if (c?.removeListener) {
+            c.removeListener("notification", onNotification);
+          } else if (c?.removeAllListeners) {
+            c.removeAllListeners("notification");
           }
-        } catch {
-          // ignore listener cleanup errors
-        }
+        } catch {}
 
         try {
           if (client) {
@@ -87,12 +94,7 @@ export async function GET(req: NextRequest): Promise<Response> {
           // Vercel may reconnect SSE requests; EventSource retries automatically.
           write(`event: ready\ndata: ${JSON.stringify({ ok: true })}\n\n`);
 
-          notificationHandler = (msg: { payload?: string | null }) => {
-            const payload = msg.payload ?? JSON.stringify({ type: "table_changed", at: Date.now() });
-            write(`event: update\ndata: ${payload}\n\n`);
-          };
-
-          client.on("notification", notificationHandler);
+          (client as any).on("notification", onNotification);
 
           pingTimer = setInterval(() => {
             write(": ping\n\n");
