@@ -183,6 +183,7 @@ export default function TableClient({
   const [showRaceTiming, setShowRaceTiming] = useState(true);
   const [showLiveRaceStatus, setShowLiveRaceStatus] = useState(true);
   const [expandedUpNext, setExpandedUpNext] = useState<Record<number, boolean>>({});
+  const [selectedRunnerStatsRow, setSelectedRunnerStatsRow] = useState<number | null>(null);
   const [isOffline, setIsOffline] = useState(false);
   const [pendingOfflineEdits, setPendingOfflineEdits] = useState(0);
   const [walCount, setWalCount] = useState(0);
@@ -1220,9 +1221,25 @@ export default function TableClient({
                 const totalMileage = runner.legs.reduce((sum, leg) => sum + leg.legMileage, 0);
                 const totalGain = runner.legs.reduce((sum, leg) => sum + leg.elevGainFt, 0);
                 const totalLoss = runner.legs.reduce((sum, leg) => sum + leg.elevLossFt, 0);
+                const isSelected = selectedRunnerStatsRow === runner.runnerNumber;
 
                 return (
-                <tr key={runner.runnerNumber}>
+                <tr
+                  key={runner.runnerNumber}
+                  onClick={() =>
+                    setSelectedRunnerStatsRow((current) =>
+                      current === runner.runnerNumber ? null : runner.runnerNumber
+                    )
+                  }
+                  style={
+                    isSelected
+                      ? {
+                          outline: "3px solid #2f5f47",
+                          outlineOffset: "-3px"
+                        }
+                      : undefined
+                  }
+                >
                   <td style={{ ...compactCellStyle, ...getVanCellStyle(runner.runnerNumber, "runner") }}>{runner.runnerNumber}</td>
                   <td style={{ ...compactCellStyle, ...getVanCellStyle(runner.runnerNumber, "name") }}>{runner.runnerName || "—"}</td>
                   <td style={{ ...compactCellStyle, ...getVanCellStyle(runner.runnerNumber, "leg") }}>{runner.van}</td>
