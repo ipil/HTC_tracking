@@ -17,7 +17,7 @@ import {
   formatSecondsToPace,
   formatUTCISOStringToLA_friendly,
 } from "@/lib/time";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { TableData, TableRow } from "@/types/domain";
 
 type Props = {
@@ -150,7 +150,7 @@ function recomputeDerived(input: TableData): TableData {
 
 export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [data, setData] = useState<TableData>(() => recomputeDerived(initialData));
-  const [viewMode, setViewMode] = useState<"race" | "plan">("plan");
+  const [viewMode, setViewMode] = useState<"race" | "plan" | "runner-stats">("plan");
   const [busy, setBusy] = useState(false);
   const [showLegStats, setShowLegStats] = useState(true);
   const [showRaceTiming, setShowRaceTiming] = useState(true);
@@ -181,7 +181,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(VIEW_MODE_KEY);
-      if (stored === "race" || stored === "plan") {
+      if (stored === "race" || stored === "plan" || stored === "runner-stats") {
         setViewMode(stored);
         return;
       }
@@ -1056,6 +1056,22 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     return data.rows.slice(startIndex, startIndex + 3);
   }, [data.rows, liveVanStatus]);
 
+  const runnerStatsRows = useMemo(() => {
+    return Array.from({ length: 12 }, (_, index) => {
+      const runnerNumber = index + 1;
+      const legs = data.rows
+        .filter((row) => row.runnerNumber === runnerNumber)
+        .sort((a, b) => a.leg - b.leg);
+
+      return {
+        runnerNumber,
+        runnerName: legs.find((row) => row.runnerName)?.runnerName ?? "",
+        van: runnerNumber <= 6 ? "Van 1" : "Van 2",
+        legs
+      };
+    });
+  }, [data.rows]);
+
   function renderLiveRaceStatusPanel() {
     if (!liveVanStatus) {
       return null;
@@ -1125,6 +1141,67 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     );
   }
 
+  function renderRunnerStatsMode() {
+    return (
+      <section className="table-wrap">
+        <div className="sheet-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th rowSpan={2}>Runner #</th>
+                <th rowSpan={2}>Runner Name</th>
+                <th rowSpan={2}>Van</th>
+                <th colSpan={5}>Leg 1</th>
+                <th colSpan={5}>Leg 2</th>
+                <th colSpan={5}>Leg 3</th>
+              </tr>
+              <tr>
+                {Array.from({ length: 3 }, (_, legIndex) => (
+                  <Fragment key={legIndex}>
+                    <th>Leg #</th>
+                    <th>Mi</th>
+                    <th>Gain</th>
+                    <th>Loss</th>
+                    <th>Net</th>
+                  </Fragment>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {runnerStatsRows.map((runner) => (
+                <tr key={runner.runnerNumber}>
+                  <td>{runner.runnerNumber}</td>
+                  <td>{runner.runnerName || "—"}</td>
+                  <td>{runner.van}</td>
+                  {Array.from({ length: 3 }, (_, legIndex) => {
+                    const legRow = runner.legs[legIndex] ?? null;
+                    return (
+                      <Fragment key={legIndex}>
+                        <td>{legRow?.leg ?? "—"}</td>
+                        <td style={legRow ? getHeatmapStyle("mileage", legRow.legMileage, data.heatmap.mileage) : undefined}>
+                          {legRow ? legRow.legMileage.toFixed(2) : "—"}
+                        </td>
+                        <td style={legRow ? getHeatmapStyle("elevGain", legRow.elevGainFt, data.heatmap.elevGain) : undefined}>
+                          {legRow?.elevGainFt ?? "—"}
+                        </td>
+                        <td style={legRow ? getHeatmapStyle("elevLoss", legRow.elevLossFt, data.heatmap.elevLoss) : undefined}>
+                          {legRow?.elevLossFt ?? "—"}
+                        </td>
+                        <td style={legRow ? getHeatmapStyle("netElevDiff", legRow.netElevDiffFt, data.heatmap.netElevDiff) : undefined}>
+                          {legRow?.netElevDiffFt ?? "—"}
+                        </td>
+                      </Fragment>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <div ref={tableRootRef} style={{ display: "grid", gap: "1rem" }}>
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -1141,6 +1218,13 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
           onClick={() => setViewMode("plan")}
         >
           Planning Mode
+        </button>
+        <button
+          className={viewMode === "runner-stats" ? "" : "secondary"}
+          type="button"
+          onClick={() => setViewMode("runner-stats")}
+        >
+          Runner Stats
         </button>
       </div>
 
@@ -1230,6 +1314,11 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
               Open Spreadsheet
             </button>
           </section>
+        </>
+      ) : viewMode === "runner-stats" ? (
+        <>
+          {renderLiveRaceStatusPanel()}
+          {renderRunnerStatsMode()}
         </>
       ) : (
         <>
