@@ -12,6 +12,7 @@ type Props = {
   value: string | null;
   defaultDay?: RaceDayKey;
   defaultMeridiem?: "am" | "pm";
+  commitMode?: "blur" | "enter" | "none";
   onChange: (value: string | null) => void;
   onCommit: (value: string | null) => void;
 };
@@ -21,6 +22,7 @@ export default function RaceDayTimeInput({
   value,
   defaultDay = "fri",
   defaultMeridiem = "am",
+  commitMode = "blur",
   onChange,
   onCommit
 }: Props): React.JSX.Element {
@@ -85,7 +87,12 @@ export default function RaceDayTimeInput({
         gap: "0.35rem",
         alignItems: "center"
       }}
-      onBlur={(event) => {
+      onBlurCapture={(event) => {
+        // Blur is unreliable on mobile refresh; onChange is the durable path.
+        if (commitMode !== "blur") {
+          return;
+        }
+
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
           commit();
         }
@@ -129,7 +136,7 @@ export default function RaceDayTimeInput({
           onChange(nextIso(day, nextHour, minute, meridiem));
         }}
         onKeyDown={(event) => {
-          if (event.key === "Enter") {
+          if (commitMode === "enter" && event.key === "Enter") {
             commit();
             (event.currentTarget as HTMLInputElement).blur();
           }
@@ -151,7 +158,7 @@ export default function RaceDayTimeInput({
           onChange(nextIso(day, hour, nextMinute, meridiem));
         }}
         onKeyDown={(event) => {
-          if (event.key === "Enter") {
+          if (commitMode === "enter" && event.key === "Enter") {
             commit();
             (event.currentTarget as HTMLInputElement).blur();
           }

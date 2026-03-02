@@ -4,6 +4,7 @@ import ImportLegsModal from "@/components/ImportLegsModal";
 import PaceEditor from "@/components/PaceEditor";
 import RaceDayTimeInput from "@/components/RaceDayTimeInput";
 import { getHeatmapStyle, getNextLegIndex, getVanCellStyle } from "@/lib/formatRules";
+import { loadWal, saveWal, walRemove, walUpsert, type WalStore } from "@/lib/offlineWal";
 import {
   computeActualDurations,
   computeInitialEstimates,
@@ -33,6 +34,7 @@ type OfflineOp = {
 
 const OFFLINE_OPS_KEY = "htc-offline-ops";
 const TABLE_CACHE_KEY = "htc-table-cache";
+const DEBUG_WAL = process.env.NODE_ENV !== "production";
 
 function minMax(values: number[]): { min: number; max: number } {
   if (values.length === 0) return { min: 0, max: 0 };
@@ -119,16 +121,20 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [showLegStats, setShowLegStats] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
   const [pendingOfflineEdits, setPendingOfflineEdits] = useState(0);
+  const [walCount, setWalCount] = useState(0);
 
-  // Keep a ref of the latest data so we can flush it during pagehide/visibilitychange.
+  // Keep refs for the latest data and WAL so mobile Safari refresh/pagehide cannot drop the last edit.
   const dataRef = useRef<TableData>(data);
+  const walRef = useRef<WalStore>({});
+  const flushTimersRef = useRef<Record<string, number>>({});
+
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
 
-  function cacheTable(next: TableData) {
+  function persistTableCacheSync(nextData: TableData): void {
     try {
-      localStorage.setItem(TABLE_CACHE_KEY, JSON.stringify(next));
+      localStorage.setItem(TABLE_CACHE_KEY, JSON.stringify(nextData));
     } catch {
       // ignore storage errors
     }
@@ -137,7 +143,51 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   function setDataAndCache(next: TableData) {
     dataRef.current = next;
     setData(next);
-    cacheTable(next); // write-through so we don't lose "last edit" on fast refresh
+    persistTableCacheSync(next); // write-through so we don't lose "last edit" on fast refresh
+  }
+
+  function applyWalToTableData(baseData: TableData, wal: WalStore): TableData {
+    const nextRows = baseData.rows.map((row) => ({ ...row }));
+
+    for (const entry of Object.values(wal)) {
+      const match = entry.path.match(/^\/api\/leg-inputs\/(\d+)$/);
+      if (!match) {
+        continue;
+      }
+
+      const leg = Number(match[1]);
+      if (!Number.isInteger(leg)) {
+        continue;
+      }
+
+      const row = nextRows.find((candidate) => candidate.leg === leg);
+      if (!row) {
+        continue;
+      }
+
+      if (entry.body && typeof entry.body === "object" && "actual_start_time" in entry.body) {
+        row.actualLegStartTime = (entry.body.actual_start_time as string | null) ?? null;
+      }
+    }
+
+    return {
+      ...baseData,
+      rows: nextRows,
+    };
+  }
+
+  async function patchJson(path: string, body: any, opts?: { keepalive?: boolean }): Promise<void> {
+    const response = await fetch(path, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+      keepalive: opts?.keepalive ?? false,
+    });
+
+    if (!response.ok) {
+      throw new Error(`PATCH failed for ${path}`);
+    }
   }
 
   // Load pending ops count on mount
@@ -155,45 +205,67 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     }
   }, []);
 
-  // Load cached table data ONLY when offline (so we don't overwrite fresh server data)
+  // Hydrate from table cache + WAL on mount so the last Actual Start edit survives fast refresh/navigation.
   useEffect(() => {
-    if (navigator.onLine) {
-      return;
-    }
+    let base = initialData;
 
     try {
       const cached = localStorage.getItem(TABLE_CACHE_KEY);
       if (cached) {
         const parsed = JSON.parse(cached) as TableData;
-        setDataAndCache(recomputeDerived(parsed));
+        base = parsed;
       }
     } catch {
       // ignore cache errors
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+
+    const wal = loadWal();
+    walRef.current = wal;
+    setWalCount(Object.keys(wal).length);
+    const recomputed = recomputeDerived(applyWalToTableData(base, wal));
+    setDataAndCache(recomputed);
+  }, [initialData]);
 
   // Extra safety: flush cache when tab/app is backgrounded or navigated away (mobile Safari especially)
   useEffect(() => {
-    const flush = () => {
-      try {
-        localStorage.setItem(TABLE_CACHE_KEY, JSON.stringify(dataRef.current));
-      } catch {
-        // ignore
+    const flushLocalState = () => {
+      persistTableCacheSync(dataRef.current);
+      saveWal(walRef.current);
+    };
+
+    const flushWalKeepalive = () => {
+      if (!navigator.onLine) {
+        return;
+      }
+
+      for (const entry of Object.values(walRef.current)) {
+        void patchJson(entry.path, entry.body, { keepalive: true })
+          .then(() => {
+            walRef.current = walRemove(walRef.current, entry.path);
+            saveWal(walRef.current);
+          })
+          .catch(() => {
+            // leave WAL entry in place
+          });
       }
     };
 
     const onVis = () => {
       if (document.visibilityState === "hidden") {
-        flush();
+        flushLocalState();
       }
     };
 
-    window.addEventListener("pagehide", flush);
+    const onPageHide = () => {
+      flushLocalState();
+      flushWalKeepalive();
+    };
+
+    window.addEventListener("pagehide", onPageHide);
     document.addEventListener("visibilitychange", onVis);
 
     return () => {
-      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("pagehide", onPageHide);
       document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
@@ -244,13 +316,12 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   async function patch(path: string, body: unknown): Promise<boolean> {
     if (!canEdit) return false;
 
-    const res = await fetch(path, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    return res.ok;
+    try {
+      await patchJson(path, body);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   function readOfflineOps(): OfflineOp[] {
@@ -277,6 +348,34 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     const ops = readOfflineOps();
     ops.push({ path, body, timestamp: Date.now() });
     writeOfflineOps(ops);
+  }
+
+  async function flushWalEntry(path: string, body: any, opts?: { keepalive?: boolean }): Promise<boolean> {
+    try {
+      await patchJson(path, body, opts);
+      walRef.current = walRemove(walRef.current, path);
+      saveWal(walRef.current);
+      setWalCount(Object.keys(walRef.current).length);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function scheduleFlush(path: string, body: any): void {
+    if (isOffline) {
+      return;
+    }
+
+    const existingTimer = flushTimersRef.current[path];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+    }
+
+    flushTimersRef.current[path] = window.setTimeout(() => {
+      delete flushTimersRef.current[path];
+      void flushWalEntry(path, body);
+    }, 600);
   }
 
   async function save(path: string, body: unknown) {
@@ -338,6 +437,20 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOffline]);
 
+  useEffect(() => {
+    const handleOnline = () => {
+      void (async () => {
+        for (const entry of Object.values(walRef.current)) {
+          await flushWalEntry(entry.path, entry.body);
+        }
+        await refresh();
+      })();
+    };
+
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, []);
+
   function updateRowLocal(leg: number, patchObj: Partial<TableRow>) {
     const next = recomputeDerived({
       ...dataRef.current,
@@ -349,6 +462,15 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   function updateConfigLocal(patchObj: Partial<TableData>) {
     const next = recomputeDerived({ ...dataRef.current, ...patchObj });
     setDataAndCache(next);
+  }
+
+  function updateRowLocalDurable(leg: number, patchObj: Partial<TableRow>): TableData {
+    const next = recomputeDerived({
+      ...dataRef.current,
+      rows: dataRef.current.rows.map((row) => (row.leg === leg ? { ...row, ...patchObj } : row)),
+    });
+    setDataAndCache(next);
+    return next;
   }
 
   function updateRunnerDefaultLocal(runnerNumber: number, pace: number | null) {
@@ -486,6 +608,56 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     setBusy(false);
   }
 
+  function handleActualStartChange(leg: number, iso: string | null) {
+    updateRowLocalDurable(leg, { actualLegStartTime: iso });
+
+    const path = `/api/leg-inputs/${leg}`;
+    const body = { actual_start_time: iso };
+    walRef.current = walUpsert(walRef.current, path, body);
+    saveWal(walRef.current);
+    setWalCount(Object.keys(walRef.current).length);
+
+    if (DEBUG_WAL) {
+      const at = Date.now();
+      let cacheParsable = false;
+      try {
+        const rawCache = localStorage.getItem(TABLE_CACHE_KEY);
+        cacheParsable = rawCache !== null && JSON.parse(rawCache) !== null;
+      } catch {
+        cacheParsable = false;
+      }
+
+      const hasWalEntry = Boolean(walRef.current[path]);
+      console.log(
+        `[htc-wal] leg=${leg} iso=${iso ?? "null"} at=${at} cacheParsable=${cacheParsable} walEntry=${hasWalEntry}`
+      );
+      (window as any).__htcDebug = {
+        lastActualStart: { leg, iso, at },
+        walKeys: Object.keys(walRef.current),
+      };
+    }
+
+    scheduleFlush(path, body);
+  }
+
+  function handleActualStartCommit(leg: number, iso: string | null) {
+    const path = `/api/leg-inputs/${leg}`;
+    const body = { actual_start_time: iso };
+    walRef.current = walUpsert(walRef.current, path, body);
+    saveWal(walRef.current);
+    setWalCount(Object.keys(walRef.current).length);
+
+    const existingTimer = flushTimersRef.current[path];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+      delete flushTimersRef.current[path];
+    }
+
+    if (!isOffline) {
+      void flushWalEntry(path, body);
+    }
+  }
+
   const estimatedFinishTime = useMemo(() => {
     const lastLeg = data.rows[data.rows.length - 1];
     if (!lastLeg?.updatedEstimatedStartTime || lastLeg.estimatedPaceSpm === null) return null;
@@ -609,6 +781,11 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       </section>
 
       <section className="table-wrap">
+        {DEBUG_WAL ? (
+          <div className="muted" style={{ padding: "0.5rem 0.6rem", fontSize: "0.8rem" }}>
+            WAL pending: {walCount} | Offline: {isOffline ? "yes" : "no"}
+          </div>
+        ) : null}
         {isAdmin ? (
           <div className="muted" style={{ padding: "0.5rem 0.6rem" }}>
             Names are edited in the Runners panel (Admin).
@@ -822,10 +999,10 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                       defaultDay={actualStartDefaults[idx]?.day}
                       defaultMeridiem={actualStartDefaults[idx]?.meridiem}
                       onChange={(iso) => {
-                        updateRowLocal(row.leg, { actualLegStartTime: iso });
+                        handleActualStartChange(row.leg, iso);
                       }}
                       onCommit={(iso) => {
-                        void save(`/api/leg-inputs/${row.leg}`, { actual_start_time: iso });
+                        handleActualStartCommit(row.leg, iso);
                       }}
                     />
                   </td>
