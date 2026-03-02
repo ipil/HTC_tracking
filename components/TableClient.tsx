@@ -128,6 +128,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [streamConnected, setStreamConnected] = useState(false);
   const [lastStreamEventAt, setLastStreamEventAt] = useState<number | null>(null);
+  const [serverNotifyCount, setServerNotifyCount] = useState(0);
+  const [serverLastNotifyAt, setServerLastNotifyAt] = useState<number | null>(null);
   const [onlineTick, setOnlineTick] = useState(0);
 
   // Keep refs for the latest data and WAL so mobile Safari refresh/pagehide cannot drop the last edit.
@@ -574,17 +576,34 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       void applyServerUpdate();
     };
 
+    const onDebug = (event: Event) => {
+      try {
+        const parsed = JSON.parse((event as MessageEvent<string>).data) as {
+          notifyCount?: number;
+          lastNotifyAt?: number | null;
+        };
+        if (typeof parsed.notifyCount === "number") {
+          setServerNotifyCount(parsed.notifyCount);
+        }
+        setServerLastNotifyAt(typeof parsed.lastNotifyAt === "number" ? parsed.lastNotifyAt : null);
+      } catch {
+        // ignore malformed debug payloads
+      }
+    };
+
     const onError = () => {
       setStreamConnected(false);
     };
 
     es.addEventListener("ready", onReady);
     es.addEventListener("update", onUpdate);
+    es.addEventListener("debug", onDebug);
     es.onerror = onError;
 
     return () => {
       es.removeEventListener("ready", onReady);
       es.removeEventListener("update", onUpdate);
+      es.removeEventListener("debug", onDebug);
       es.close();
       setStreamConnected(false);
     };
@@ -986,7 +1005,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       <section className="table-wrap">
         {DEBUG_WAL ? (
           <div className="muted" style={{ padding: "0.5rem 0.6rem", fontSize: "0.8rem" }}>
-            WAL pending: {walCount} | Offline: {isOffline ? "yes" : "no"} | Stream: {streamConnected ? "connected" : "disconnected"} | Last stream: {lastStreamEventAt ? new Date(lastStreamEventAt).toLocaleTimeString() : "-"} | Last sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "-"}
+            WAL pending: {walCount} | Offline: {isOffline ? "yes" : "no"} | Stream: {streamConnected ? "connected" : "disconnected"} | Last stream: {lastStreamEventAt ? new Date(lastStreamEventAt).toLocaleTimeString() : "-"} | Last sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "-"} | Server NOTIFY count: {serverNotifyCount} | Server last NOTIFY: {serverLastNotifyAt ? new Date(serverLastNotifyAt).toLocaleTimeString() : "-"}
           </div>
         ) : null}
         {isAdmin ? (

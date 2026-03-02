@@ -15,6 +15,8 @@ export async function GET(req: NextRequest): Promise<Response> {
   let client: any = null;
   let pingTimer: ReturnType<typeof setInterval> | null = null;
   let closed = false;
+  let notifyCount = 0;
+  let lastNotifyAt: number | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -25,7 +27,16 @@ export async function GET(req: NextRequest): Promise<Response> {
       };
       const onNotification = (msg: PgNotification) => {
         const payload = msg.payload ?? JSON.stringify({ type: "table_changed", at: Date.now() });
+        notifyCount += 1;
+        lastNotifyAt = Date.now();
         write(`event: update\ndata: ${payload}\n\n`);
+        write(
+          `event: debug\ndata: ${JSON.stringify({
+            notifyCount,
+            lastNotifyAt,
+            payloadBytes: msg.payload?.length ?? 0
+          })}\n\n`
+        );
       };
 
       const cleanup = async () => {
@@ -93,6 +104,7 @@ export async function GET(req: NextRequest): Promise<Response> {
 
           // Vercel may reconnect SSE requests; EventSource retries automatically.
           write(`event: ready\ndata: ${JSON.stringify({ ok: true })}\n\n`);
+          write(`event: debug\ndata: ${JSON.stringify({ notifyCount: 0, lastNotifyAt: null })}\n\n`);
 
           (client as any).on("notification", onNotification);
 
