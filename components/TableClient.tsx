@@ -1142,27 +1142,35 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   }
 
   function renderRunnerStatsMode() {
+    const groupDividerStyle = { borderLeft: "3px solid #b8c2ba" } as const;
+    const compactCellStyle = { padding: "0.25rem 0.3rem" } as const;
+    const compactHeaderStyle = {
+      padding: "0.25rem 0.3rem",
+      whiteSpace: "nowrap" as const,
+      maxWidth: "none"
+    };
+
     return (
       <section className="table-wrap">
         <div className="sheet-scroll">
-          <table>
+          <table style={{ width: "max-content", minWidth: "max-content" }}>
             <thead>
               <tr>
-                <th rowSpan={2}>Runner #</th>
-                <th rowSpan={2}>Runner Name</th>
-                <th rowSpan={2}>Van</th>
-                <th colSpan={5}>Leg 1</th>
-                <th colSpan={5}>Leg 2</th>
-                <th colSpan={5}>Leg 3</th>
+                <th rowSpan={2} style={compactHeaderStyle}>Runner #</th>
+                <th rowSpan={2} style={compactHeaderStyle}>Runner Name</th>
+                <th rowSpan={2} style={compactHeaderStyle}>Van</th>
+                <th colSpan={5} style={compactHeaderStyle}>Leg 1</th>
+                <th colSpan={5} style={compactHeaderStyle}>Leg 2</th>
+                <th colSpan={5} style={compactHeaderStyle}>Leg 3</th>
               </tr>
               <tr>
                 {Array.from({ length: 3 }, (_, legIndex) => (
                   <Fragment key={legIndex}>
-                    <th>Leg #</th>
-                    <th>Mi</th>
-                    <th>Gain</th>
-                    <th>Loss</th>
-                    <th>Net</th>
+                    <th style={{ ...compactHeaderStyle, ...(legIndex > 0 ? groupDividerStyle : {}) }}>Leg #</th>
+                    <th style={compactHeaderStyle}>Mi</th>
+                    <th style={compactHeaderStyle}>Gain</th>
+                    <th style={compactHeaderStyle}>Loss</th>
+                    <th style={compactHeaderStyle}>Net</th>
                   </Fragment>
                 ))}
               </tr>
@@ -1170,24 +1178,24 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
             <tbody>
               {runnerStatsRows.map((runner) => (
                 <tr key={runner.runnerNumber}>
-                  <td>{runner.runnerNumber}</td>
-                  <td>{runner.runnerName || "—"}</td>
-                  <td>{runner.van}</td>
+                  <td style={compactCellStyle}>{runner.runnerNumber}</td>
+                  <td style={compactCellStyle}>{runner.runnerName || "—"}</td>
+                  <td style={compactCellStyle}>{runner.van}</td>
                   {Array.from({ length: 3 }, (_, legIndex) => {
                     const legRow = runner.legs[legIndex] ?? null;
                     return (
                       <Fragment key={legIndex}>
-                        <td>{legRow?.leg ?? "—"}</td>
-                        <td style={legRow ? getHeatmapStyle("mileage", legRow.legMileage, data.heatmap.mileage) : undefined}>
+                        <td style={{ ...compactCellStyle, ...(legIndex > 0 ? groupDividerStyle : {}) }}>{legRow?.leg ?? "—"}</td>
+                        <td style={{ ...compactCellStyle, ...(legRow ? getHeatmapStyle("mileage", legRow.legMileage, data.heatmap.mileage) : {}) }}>
                           {legRow ? legRow.legMileage.toFixed(2) : "—"}
                         </td>
-                        <td style={legRow ? getHeatmapStyle("elevGain", legRow.elevGainFt, data.heatmap.elevGain) : undefined}>
+                        <td style={{ ...compactCellStyle, ...(legRow ? getHeatmapStyle("elevGain", legRow.elevGainFt, data.heatmap.elevGain) : {}) }}>
                           {legRow?.elevGainFt ?? "—"}
                         </td>
-                        <td style={legRow ? getHeatmapStyle("elevLoss", legRow.elevLossFt, data.heatmap.elevLoss) : undefined}>
+                        <td style={{ ...compactCellStyle, ...(legRow ? getHeatmapStyle("elevLoss", legRow.elevLossFt, data.heatmap.elevLoss) : {}) }}>
                           {legRow?.elevLossFt ?? "—"}
                         </td>
-                        <td style={legRow ? getHeatmapStyle("netElevDiff", legRow.netElevDiffFt, data.heatmap.netElevDiff) : undefined}>
+                        <td style={{ ...compactCellStyle, ...(legRow ? getHeatmapStyle("netElevDiff", legRow.netElevDiffFt, data.heatmap.netElevDiff) : {}) }}>
                           {legRow?.netElevDiffFt ?? "—"}
                         </td>
                       </Fragment>
