@@ -4,6 +4,7 @@ import { getTableData } from "@/lib/tableData";
 import { unauthorized } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(): Promise<NextResponse> {
   if (!(await isSiteAuthenticated())) {
@@ -12,7 +13,10 @@ export async function GET(): Promise<NextResponse> {
   const data = await getTableData();
   return NextResponse.json(data, {
     headers: {
-      "Cache-Control": "no-store"
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0",
+      "Surrogate-Control": "no-store"
     }
   });
 }

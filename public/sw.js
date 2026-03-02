@@ -36,6 +36,12 @@ self.addEventListener("fetch", (event) => {
   // Only handle same-origin requests
   if (url.origin !== self.location.origin) return;
 
+  // Never cache API requests.
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   // 1) Navigations: serve cached "/" when offline (or even cache-first always)
   if (req.mode === "navigate") {
     event.respondWith(
