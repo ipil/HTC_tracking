@@ -26,7 +26,11 @@ export default async function HomePage() {
         <header className="panel" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <h1>Hood to Coast Relay Planner</h1>
-            <p className="muted">36-leg collaborative planning table with relay timing logic.</p>
+            <div className="muted">
+              <div>Race Mode: Quick glance at the next few ETAs and a button to push at the handoff time</div>
+              <div>Planning Mode: Full spreadsheet with all race info - input your estimated pace(s) here</div>
+              <div>Runner Stats: Quick visualization of each runner&apos;s legs</div>
+            </div>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             {accessLevel === "admin" ? <span>Admin Mode</span> : null}
