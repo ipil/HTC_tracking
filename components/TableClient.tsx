@@ -465,6 +465,33 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   }, []);
 
   useEffect(() => {
+    const handler = (event: StorageEvent) => {
+      if (!event.key || event.newValue === null) {
+        return;
+      }
+
+      if (event.key === TABLE_CACHE_KEY) {
+        try {
+          const parsed = JSON.parse(event.newValue) as TableData;
+          const next = recomputeDerived(applyWalToTableData(parsed, walRef.current));
+          setDataAndCache(next);
+        } catch {
+          // ignore invalid cache payloads
+        }
+        return;
+      }
+
+      if (event.key === "htc-write-ahead-log-v1") {
+        walRef.current = loadWal();
+        setWalCount(Object.keys(walRef.current).length);
+      }
+    };
+
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
+
+  useEffect(() => {
     function shouldSkipPolling(): boolean {
       if (!navigator.onLine) {
         return true;
