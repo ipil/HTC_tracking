@@ -35,6 +35,7 @@ type OfflineOp = {
 const OFFLINE_OPS_KEY = "htc-offline-ops";
 const TABLE_CACHE_KEY = "htc-table-cache";
 const DEBUG_WAL = process.env.NODE_ENV !== "production";
+type CachedTablePayload = { data: TableData; cachedAt: number };
 
 function minMax(values: number[]): { min: number; max: number } {
   if (values.length === 0) return { min: 0, max: 0 };
@@ -129,6 +130,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
 
   // Keep refs for the latest data and WAL so mobile Safari refresh/pagehide cannot drop the last edit.
   const dataRef = useRef<TableData>(data);
+  const dataVersionRef = useRef<number>(0);
   const walRef = useRef<WalStore>({});
   const flushTimersRef = useRef<Record<string, number>>({});
   const tableRootRef = useRef<HTMLDivElement | null>(null);
@@ -137,18 +139,47 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     dataRef.current = data;
   }, [data]);
 
-  function persistTableCacheSync(nextData: TableData): void {
+  function parseCachedTableValue(raw: string | null): { data: TableData | null; cachedAt: number } {
+    if (!raw) {
+      return { data: null, cachedAt: 0 };
+    }
+
     try {
-      localStorage.setItem(TABLE_CACHE_KEY, JSON.stringify(nextData));
+      const parsed = JSON.parse(raw) as CachedTablePayload | TableData;
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        "data" in parsed &&
+        "cachedAt" in parsed &&
+        parsed.data &&
+        typeof parsed.cachedAt === "number"
+      ) {
+        return { data: parsed.data as TableData, cachedAt: parsed.cachedAt };
+      }
+
+      if (parsed && typeof parsed === "object" && "rows" in parsed) {
+        return { data: parsed as TableData, cachedAt: 0 };
+      }
+    } catch {
+      // ignore invalid cache payloads
+    }
+
+    return { data: null, cachedAt: 0 };
+  }
+
+  function persistTableCacheSync(nextData: TableData, timestamp = Date.now()): void {
+    try {
+      localStorage.setItem(TABLE_CACHE_KEY, JSON.stringify({ data: nextData, cachedAt: timestamp }));
     } catch {
       // ignore storage errors
     }
   }
 
-  function setDataAndCache(next: TableData) {
+  function setDataAndCache(next: TableData, timestamp = Date.now()) {
     dataRef.current = next;
+    dataVersionRef.current = timestamp;
     setData(next);
-    persistTableCacheSync(next); // write-through so we don't lose "last edit" on fast refresh
+    persistTableCacheSync(next, timestamp); // write-through so we don't lose "last edit" on fast refresh
   }
 
   function applyWalToTableData(baseData: TableData, wal: WalStore): TableData {
@@ -220,24 +251,17 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
 
   // Hydrate from table cache + WAL on mount so the last Actual Start edit survives fast refresh/navigation.
   useEffect(() => {
-    let base = initialData;
-
-    try {
-      const cached = localStorage.getItem(TABLE_CACHE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached) as TableData;
-        base = parsed;
-      }
-    } catch {
-      // ignore cache errors
-    }
-
     const wal = loadWal();
     walRef.current = wal;
     setWalCount(Object.keys(wal).length);
-    const withWal = applyWalToTableData(base, wal);
+
+    const { data: cachedData, cachedAt } = parseCachedTableValue(localStorage.getItem(TABLE_CACHE_KEY));
+    const online = navigator.onLine;
+    const baseData = online ? initialData ?? cachedData ?? initialData : cachedData ?? initialData;
+    const baseAt = online ? Date.now() : cachedAt;
+    const withWal = applyWalToTableData(baseData, wal);
     const recomputed = recomputeDerived(withWal);
-    setDataAndCache(recomputed);
+    setDataAndCache(recomputed, baseAt);
     // initialData is the server-provided mount snapshot; hydrate exactly once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -245,7 +269,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   // Extra safety: flush cache when tab/app is backgrounded or navigated away (mobile Safari especially)
   useEffect(() => {
     const flushLocalState = () => {
-      persistTableCacheSync(dataRef.current);
+      persistTableCacheSync(dataRef.current, dataVersionRef.current || Date.now());
       saveWal(walRef.current);
     };
 
@@ -326,7 +350,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     const res = await fetch("/api/table", { cache: "no-store" });
     if (res.ok) {
       const json = (await res.json()) as TableData;
-      setDataAndCache(recomputeDerived(json));
+      setDataAndCache(recomputeDerived(json), Date.now());
     }
   }
 
@@ -482,13 +506,12 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       }
 
       if (event.key === TABLE_CACHE_KEY) {
-        try {
-          const parsed = JSON.parse(event.newValue) as TableData;
-          const next = recomputeDerived(applyWalToTableData(parsed, walRef.current));
-          setDataAndCache(next);
-        } catch {
-          // ignore invalid cache payloads
+        const { data: parsedData, cachedAt } = parseCachedTableValue(event.newValue);
+        if (!parsedData || cachedAt <= dataVersionRef.current) {
+          return;
         }
+        const next = recomputeDerived(applyWalToTableData(parsedData, walRef.current));
+        setDataAndCache(next, cachedAt);
         return;
       }
 
@@ -531,7 +554,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       try {
         const serverData = await fetchFreshTable();
         const serverDataWithWal = recomputeDerived(applyWalToTableData(serverData, walRef.current));
-        setDataAndCache(serverDataWithWal);
+        setDataAndCache(serverDataWithWal, Date.now());
         if (DEBUG_WAL) {
           setLastSyncAt(Date.now());
         }
@@ -594,7 +617,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       try {
         const serverData = await fetchFreshTable();
         const serverDataWithWal = recomputeDerived(applyWalToTableData(serverData, walRef.current));
-        setDataAndCache(serverDataWithWal);
+        setDataAndCache(serverDataWithWal, Date.now());
         if (DEBUG_WAL) {
           setLastSyncAt(Date.now());
         }
