@@ -122,6 +122,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [data, setData] = useState<TableData>(() => recomputeDerived(initialData));
   const [busy, setBusy] = useState(false);
   const [showLegStats, setShowLegStats] = useState(true);
+  const [showRaceTiming, setShowRaceTiming] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
   const [pendingOfflineEdits, setPendingOfflineEdits] = useState(0);
   const [walCount, setWalCount] = useState(0);
@@ -933,74 +934,87 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       ) : null}
 
       <section className="panel" style={{ display: "grid", gap: "0.8rem" }}>
-        <h2>Race Timing</h2>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "max-content",
-            gap: "0.85rem",
-            justifyContent: "start",
-            alignItems: "start",
-          }}
-        >
-          <label style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
-            <div className="muted">Race Start Time</div>
-            <RaceDayTimeInput
-              disabled={!canEdit}
-              value={data.race_start_time}
-              onChange={(iso) => {
-                updateConfigLocal({ race_start_time: iso });
-              }}
-              onCommit={(iso) => {
-                void save("/api/config", { race_start_time: iso });
-              }}
-            />
-          </label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
+          <h2>Race Start and Finish Times</h2>
+          <button className="secondary" type="button" onClick={() => setShowRaceTiming((value) => !value)}>
+            {showRaceTiming ? "Collapse" : "Expand"}
+          </button>
+        </div>
 
-          <div style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
-            <div className="muted">Estimated Finish Time</div>
+        {showRaceTiming ? (
+          <>
             <div
               style={{
-                minHeight: 34,
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "0.25rem 0.35rem",
-                border: "1px solid #d4dbd4",
-                borderRadius: 6,
-                background: "#f7faf7",
+                display: "grid",
+                gridTemplateColumns: "max-content",
+                gap: "0.85rem",
+                justifyContent: "start",
+                alignItems: "start",
               }}
             >
-              {formatUTCISOStringToLA_friendly(estimatedFinishTime)}
+              <label style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
+                <div className="muted">Race Start Time</div>
+                <RaceDayTimeInput
+                  disabled={!canEdit}
+                  value={data.race_start_time}
+                  onChange={(iso) => {
+                    updateConfigLocal({ race_start_time: iso });
+                  }}
+                  onCommit={(iso) => {
+                    void save("/api/config", { race_start_time: iso });
+                  }}
+                />
+              </label>
+
+              <div style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
+                <div className="muted">Estimated Finish Time</div>
+                <div
+                  style={{
+                    minHeight: 34,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "0.25rem 0.35rem",
+                    border: "1px solid #d4dbd4",
+                    borderRadius: 6,
+                    background: "#f7faf7",
+                  }}
+                >
+                  {formatUTCISOStringToLA_friendly(estimatedFinishTime)}
+                </div>
+              </div>
+
+              <label style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
+                <div className="muted">Actual Finish Time</div>
+                <RaceDayTimeInput
+                  disabled={!canEdit}
+                  value={data.finish_time}
+                  onChange={(iso) => {
+                    updateConfigLocal({ finish_time: iso });
+                  }}
+                  onCommit={(iso) => {
+                    void save("/api/config", { finish_time: iso });
+                  }}
+                />
+              </label>
             </div>
-          </div>
 
-          <label style={{ display: "grid", gap: "0.35rem", width: "fit-content" }}>
-            <div className="muted">Actual Finish Time</div>
-            <RaceDayTimeInput
-              disabled={!canEdit}
-              value={data.finish_time}
-              onChange={(iso) => {
-                updateConfigLocal({ finish_time: iso });
-              }}
-              onCommit={(iso) => {
-                void save("/api/config", { finish_time: iso });
-              }}
-            />
-          </label>
-        </div>
-
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <button className="secondary" type="button" onClick={() => setShowLegStats((value) => !value)}>
-            {showLegStats ? "Hide" : "Show"} Leg Stats
-          </button>
-          {isAdmin ? <ImportLegsModal onImported={refresh} /> : null}
-          {isAdmin ? (
-            <button className="secondary" type="button" onClick={() => void resetActualStartTimes()}>
-              Reset Actual Start Times
-            </button>
-          ) : null}
-        </div>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              {isAdmin ? <ImportLegsModal onImported={refresh} /> : null}
+              {isAdmin ? (
+                <button className="secondary" type="button" onClick={() => void resetActualStartTimes()}>
+                  Reset Actual Start Times
+                </button>
+              ) : null}
+            </div>
+          </>
+        ) : null}
       </section>
+
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <button className="secondary" type="button" onClick={() => setShowLegStats((value) => !value)}>
+          {showLegStats ? "Hide" : "Show"} Leg Stats
+        </button>
+      </div>
 
       <section className="table-wrap">
         {DEBUG_WAL ? (
