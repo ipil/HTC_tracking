@@ -34,7 +34,9 @@ type OfflineOp = {
 
 const OFFLINE_OPS_KEY = "htc-offline-ops";
 const TABLE_CACHE_KEY = "htc-table-cache";
-const DEBUG_WAL = process.env.NODE_ENV !== "production";
+const DEBUG_WAL =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).has("debug");
 type CachedTablePayload = { data: TableData; cachedAt: number };
 
 function minMax(values: number[]): { min: number; max: number } {
