@@ -1,4 +1,4 @@
-import { Client } from "@neondatabase/serverless";
+import { Pool } from "@neondatabase/serverless";
 import { NextRequest } from "next/server";
 import { getConnectionString } from "@/lib/db";
 
@@ -6,12 +6,15 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function GET(request: NextRequest): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
   const encoder = new TextEncoder();
-  let client: Client | null = null;
+  const connectionString = getConnectionString();
+  const pool = new Pool({ connectionString });
+
+  let client: Awaited<ReturnType<typeof pool.connect>> | null = null;
   let pingTimer: ReturnType<typeof setInterval> | null = null;
+  let notificationHandler: ((msg: { payload?: string | null }) => void) | null = null;
   let closed = false;
-  let abortHandler: (() => void) | null = null;
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -27,23 +30,42 @@ export async function GET(request: NextRequest): Promise<Response> {
         }
         closed = true;
 
-        if (pingTimer) {
-          clearInterval(pingTimer);
-          pingTimer = null;
-        }
-
-        if (abortHandler) {
-          request.signal.removeEventListener("abort", abortHandler);
-          abortHandler = null;
-        }
-
-        if (client) {
-          try {
-            await client.end();
-          } catch {
-            // ignore shutdown errors
+        try {
+          if (pingTimer) {
+            clearInterval(pingTimer);
+            pingTimer = null;
           }
-          client = null;
+        } catch {
+          // ignore timer cleanup errors
+        }
+
+        try {
+          if (client && notificationHandler) {
+            client.removeListener("notification", notificationHandler);
+          }
+        } catch {
+          // ignore listener cleanup errors
+        }
+
+        try {
+          if (client) {
+            await client.query("UNLISTEN *");
+          }
+        } catch {
+          // ignore unlisten errors
+        }
+
+        try {
+          client?.release();
+        } catch {
+          // ignore release errors
+        }
+        client = null;
+
+        try {
+          await pool.end();
+        } catch {
+          // ignore pool shutdown errors
         }
 
         try {
@@ -53,38 +75,38 @@ export async function GET(request: NextRequest): Promise<Response> {
         }
       };
 
-      abortHandler = () => {
+      req.signal.addEventListener("abort", () => {
         void cleanup();
-      };
-      request.signal.addEventListener("abort", abortHandler);
+      });
 
       void (async () => {
         try {
-          client = new Client({ connectionString: getConnectionString() });
-          await client.connect();
+          client = await pool.connect();
           await client.query("LISTEN htc_updates");
 
+          // Vercel may reconnect SSE requests; EventSource retries automatically.
           write(`event: ready\ndata: ${JSON.stringify({ ok: true })}\n\n`);
 
-          client.on("notification", (message) => {
-            if (!message.payload) {
-              return;
-            }
-            write(`event: update\ndata: ${message.payload}\n\n`);
-          });
+          notificationHandler = (msg: { payload?: string | null }) => {
+            const payload = msg.payload ?? JSON.stringify({ type: "table_changed", at: Date.now() });
+            write(`event: update\ndata: ${payload}\n\n`);
+          };
+
+          client.on("notification", notificationHandler);
 
           pingTimer = setInterval(() => {
             write(": ping\n\n");
           }, 15000);
-        } catch (error) {
-          write(`event: error\ndata: ${JSON.stringify({ error: "stream_init_failed" })}\n\n`);
+        } catch {
           void cleanup();
         }
       })();
     },
     cancel() {
-      if (abortHandler) {
-        abortHandler();
+      try {
+        req.signal.throwIfAborted?.();
+      } catch {
+        // ignore
       }
     }
   });
@@ -92,7 +114,7 @@ export async function GET(request: NextRequest): Promise<Response> {
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-store",
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
       "Connection": "keep-alive"
     }
   });
