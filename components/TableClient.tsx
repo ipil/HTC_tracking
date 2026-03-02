@@ -44,6 +44,11 @@ function minMax(values: number[]): { min: number; max: number } {
   return { min: Math.min(...values), max: Math.max(...values) };
 }
 
+function getEstimatedDurationSec(row: TableRow): number | null {
+  if (!row.estimatedPaceSpm || !row.legMileage) return null;
+  return row.estimatedPaceSpm * row.legMileage;
+}
+
 /**
  * Recompute all derived fields client-side using the same math as getTableData().
  * This is what enables “Google Sheets-like” cascading updates while offline.
@@ -132,7 +137,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [serverNotifyCount, setServerNotifyCount] = useState(0);
   const [serverLastNotifyAt, setServerLastNotifyAt] = useState<number | null>(null);
   const [onlineTick, setOnlineTick] = useState(0);
-  const [nowTick, setNowTick] = useState(Date.now());
+  const [tick, setTick] = useState(0);
 
   // Keep refs for the latest data and WAL so mobile Safari refresh/pagehide cannot drop the last edit.
   const dataRef = useRef<TableData>(data);
@@ -147,7 +152,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setNowTick(Date.now());
+      setTick((current) => current + 1);
     }, 1000);
 
     return () => window.clearInterval(intervalId);
@@ -918,102 +923,104 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   }, [data.race_start_time, data.rows]);
 
   const liveVanStatus = useMemo(() => {
+    const now = Date.now();
+
     const rowsWithTimeline = data.rows.map((row) => {
       const startIso = row.actualLegStartTime ?? row.updatedEstimatedStartTime;
-      const startTimeMs = startIso ? Date.parse(startIso) : null;
-      const durationSec =
-        row.estimatedPaceSpm !== null && Number.isFinite(row.legMileage)
-          ? Math.round(row.legMileage * row.estimatedPaceSpm)
-          : null;
-      const endTimeMs =
-        startTimeMs !== null && durationSec !== null ? startTimeMs + durationSec * 1000 : null;
+      const startMs = startIso ? Date.parse(startIso) : null;
+      const durationSec = getEstimatedDurationSec(row);
+      const endMs = startMs && durationSec ? startMs + durationSec * 1000 : null;
 
       return {
         row,
         startIso,
-        startTimeMs,
+        startMs,
         durationSec,
-        endTimeMs,
+        endMs,
       };
     });
 
     const actualCurrent =
       rowsWithTimeline.find(
-        ({ row, startTimeMs, endTimeMs }) =>
-          row.actualLegStartTime &&
-          startTimeMs !== null &&
-          startTimeMs <= nowTick &&
-          (endTimeMs === null || nowTick < endTimeMs)
+        ({ row, startMs, endMs }) =>
+          row.actualLegStartTime && startMs !== null && startMs <= now && (endMs === null || now < endMs)
       ) ?? null;
 
     const estimatedCurrent =
       rowsWithTimeline.find(
-        ({ row, startTimeMs, endTimeMs }) =>
-          !row.actualLegStartTime &&
-          startTimeMs !== null &&
-          startTimeMs <= nowTick &&
-          (endTimeMs === null || nowTick < endTimeMs)
+        ({ row, startMs, endMs }) =>
+          row.updatedEstimatedStartTime &&
+          startMs !== null &&
+          startMs <= now &&
+          (endMs === null || now < endMs)
       ) ?? null;
 
-    const currentEntry =
-      actualCurrent ??
-      estimatedCurrent ??
-      rowsWithTimeline.find(({ startTimeMs }) => startTimeMs !== null && startTimeMs > nowTick) ??
-      rowsWithTimeline[0] ??
-      null;
-
+    const currentEntry = actualCurrent ?? estimatedCurrent ?? rowsWithTimeline[0] ?? null;
     if (!currentEntry) {
       return null;
     }
 
-    const isRaceStarted =
-      currentEntry.startTimeMs !== null ? currentEntry.startTimeMs <= nowTick : false;
-    const nextRow = data.rows.find((candidate) => candidate.leg === currentEntry.row.leg + 1) ?? null;
-    const etaMs = currentEntry.endTimeMs ?? (nextRow?.updatedEstimatedStartTime ? Date.parse(nextRow.updatedEstimatedStartTime) : null);
-    const countdownSec = etaMs !== null ? Math.max(0, Math.floor((etaMs - nowTick) / 1000)) : null;
-    const activeVan = currentEntry.row.runnerNumber <= 6 ? "Van 1" : "Van 2";
-    const nextExchangeLabel = nextRow?.exchangeLabel ?? null;
-    const nextExchangeUrl = nextRow?.exchangeUrl ?? null;
+    const raceStarted = currentEntry.startMs !== null ? currentEntry.startMs <= now : false;
+    const countdownSec =
+      currentEntry.endMs !== null ? Math.max(0, Math.floor((currentEntry.endMs - now) / 1000)) : null;
 
     return {
-      modeLabel: isRaceStarted ? "Now running" : "Next up",
+      raceStarted,
       currentRow: currentEntry.row,
-      activeVan,
-      nextExchangeLabel,
-      nextExchangeUrl,
+      activeVan: currentEntry.row.runnerNumber <= 6 ? "Van 1" : "Van 2",
       etaIso:
-        etaMs !== null && Number.isFinite(etaMs) ? new Date(etaMs).toISOString() : null,
+        currentEntry.endMs !== null && Number.isFinite(currentEntry.endMs)
+          ? new Date(currentEntry.endMs).toISOString()
+          : null,
       countdownSec,
       isFinalLeg: currentEntry.row.leg === 36,
     };
-  }, [data.rows, nowTick]);
+  }, [data.rows, tick]);
 
   return (
     <div ref={tableRootRef} style={{ display: "grid", gap: "1rem" }}>
       {liveVanStatus ? (
-        <section className="panel" style={{ display: "grid", gap: "0.45rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
-            <strong>
-              {liveVanStatus.modeLabel}: Runner {liveVanStatus.currentRow.runnerNumber}
-              {liveVanStatus.currentRow.runnerName ? ` — ${liveVanStatus.currentRow.runnerName}` : ""}
-            </strong>
-            <span className="muted">{liveVanStatus.activeVan} active</span>
+        <section className="panel" style={{ display: "grid", gap: "0.65rem" }}>
+          <div style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.04em", color: "#5c665f" }}>
+            {liveVanStatus.raceStarted ? "NOW RUNNING" : "RACE NOT STARTED"}
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-            <span>
+          <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>
+            Runner {liveVanStatus.currentRow.runnerNumber}
+            {liveVanStatus.currentRow.runnerName ? ` — ${liveVanStatus.currentRow.runnerName}` : ""}
+          </div>
+          <div style={{ fontSize: "1rem" }}>
+            <strong>Active:</strong> {liveVanStatus.activeVan}
+          </div>
+          <div style={{ display: "grid", gap: "0.2rem" }}>
+            <div style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.04em", color: "#5c665f" }}>
+              NEXT EXCHANGE
+            </div>
+            <div style={{ fontSize: "1rem" }}>
               {liveVanStatus.isFinalLeg
-                ? "Final leg"
-                : `Next exchange: ${liveVanStatus.nextExchangeLabel || "—"}`}
-            </span>
-            {!liveVanStatus.isFinalLeg && liveVanStatus.nextExchangeUrl ? (
-              <a href={liveVanStatus.nextExchangeUrl} target="_blank" rel="noreferrer">
-                Navigate
-              </a>
+                ? "Final Leg — Heading to Finish"
+                : liveVanStatus.currentRow.exchangeLabel || "—"}
+            </div>
+            {!liveVanStatus.isFinalLeg && liveVanStatus.currentRow.exchangeUrl ? (
+              <div>
+                <a href={liveVanStatus.currentRow.exchangeUrl} target="_blank" rel="noreferrer">
+                  Navigate →
+                </a>
+              </div>
             ) : null}
           </div>
-          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-            <span>ETA: {formatUTCISOStringToLA_friendly(liveVanStatus.etaIso)}</span>
-            <span>In: {formatSecondsToHMS(liveVanStatus.countdownSec)}</span>
+          <div style={{ display: "grid", gap: "0.35rem" }}>
+            <div>
+              <strong>ETA</strong>
+            </div>
+            <div style={{ fontSize: "1rem" }}>{formatUTCISOStringToLA_friendly(liveVanStatus.etaIso)}</div>
+          </div>
+          <div style={{ display: "grid", gap: "0.35rem" }}>
+            <div>
+              <strong>In</strong>
+            </div>
+            <div style={{ fontSize: "1.1rem", fontVariantNumeric: "tabular-nums" }}>
+              {formatSecondsToHMS(liveVanStatus.countdownSec)}
+            </div>
           </div>
         </section>
       ) : null}
