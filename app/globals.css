@@ -73,6 +73,10 @@ th {
   background: #f2f5f1;
   z-index: 20;
   box-shadow: 0 2px 0 #d7ddd7, 0 4px 8px rgba(27, 31, 29, 0.04);
+  white-space: normal;
+  line-height: 1.15;
+  max-width: 8rem;
+  vertical-align: bottom;
 }
 
 input,
