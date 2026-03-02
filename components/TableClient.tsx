@@ -934,11 +934,17 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       ) : null}
 
       <section className="panel" style={{ display: "grid", gap: "0.8rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
-          <h2>Race Start and Finish Times</h2>
-          <button className="secondary" type="button" onClick={() => setShowRaceTiming((value) => !value)}>
-            {showRaceTiming ? "Collapse" : "Expand"}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <button
+            className="secondary"
+            type="button"
+            aria-label={showRaceTiming ? "Collapse race start and finish times" : "Expand race start and finish times"}
+            onClick={() => setShowRaceTiming((value) => !value)}
+            style={{ padding: "0.15rem 0.45rem", lineHeight: 1 }}
+          >
+            {showRaceTiming ? "\u25be" : "\u25b8"}
           </button>
+          <h2>Race Start and Finish Times</h2>
         </div>
 
         {showRaceTiming ? (
