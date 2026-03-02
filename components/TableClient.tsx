@@ -1534,11 +1534,11 @@ export default function TableClient({
           <table>
             <thead>
               <tr>
-              <th data-column="A" title="Column A">
-                Runner
-              </th>
               <th data-column="B" title="Column B" style={stickyNameHeaderStyle}>
                 Name
+              </th>
+              <th data-column="A" title="Column A">
+                Runner
               </th>
               <th data-column="C" title="Column C">
                 Leg
@@ -1595,8 +1595,8 @@ export default function TableClient({
                 const rowClass = idx === nextLegIndex ? "next-leg" : "";
                 return (
                   <tr key={row.leg} className={rowClass}>
-                  <td style={getVanCellStyle(row.runnerNumber, "runner")}>{row.runnerNumber}</td>
                   <td style={{ ...stickyNameCellBaseStyle, ...getVanCellStyle(row.runnerNumber, "name") }}>{row.runnerName}</td>
+                  <td style={getVanCellStyle(row.runnerNumber, "runner")}>{row.runnerNumber}</td>
                   <td style={getVanCellStyle(row.runnerNumber, "leg")}>{row.leg}</td>
 
                   {showLegStats ? (
