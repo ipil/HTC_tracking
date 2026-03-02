@@ -1,7 +1,4 @@
-import Link from "next/link";
-import AccessIndicator, { getAccessLevelFromCookies } from "@/components/AccessIndicator";
-import LogoutButton from "@/components/LogoutButton";
-import RunnersPanel from "@/components/RunnersPanel";
+import { getAccessLevelFromCookies } from "@/components/AccessIndicator";
 import TableClient from "@/components/TableClient";
 import { getRunnersData } from "@/lib/runnersData";
 import { getTableData } from "@/lib/tableData";
@@ -22,21 +19,14 @@ export default async function HomePage() {
   return (
     <main>
       <div style={{ display: "grid", gap: "1rem" }}>
-        <AccessIndicator />
-        <header className="panel" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <h1>Hood to Coast Relay Planner</h1>
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            {accessLevel === "admin" ? <span>Admin Mode</span> : null}
-            {accessLevel === "team-editor" ? <span>Team Editor Mode</span> : null}
-            {!isAdmin ? <Link href="/admin/login">Admin login</Link> : null}
-            {isLoggedIn ? <LogoutButton /> : null}
-          </div>
-        </header>
-
-        {isAdmin ? <RunnersPanel initialRunners={runners} /> : null}
-        <TableClient initialData={data} isAdmin={isAdmin} canEdit={canEdit} />
+        <TableClient
+          initialData={data}
+          initialRunners={runners}
+          isAdmin={isAdmin}
+          isLoggedIn={isLoggedIn}
+          canEdit={canEdit}
+          accessLevel={accessLevel}
+        />
       </div>
     </main>
   );

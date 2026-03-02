@@ -1,8 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import ImportLegsModal from "@/components/ImportLegsModal";
+import LogoutButton from "@/components/LogoutButton";
 import PaceEditor from "@/components/PaceEditor";
 import RaceDayTimeInput from "@/components/RaceDayTimeInput";
+import RunnersPanel from "@/components/RunnersPanel";
 import { getHeatmapStyle, getNextLegIndex, getVanCellStyle } from "@/lib/formatRules";
 import { loadWal, saveWal, walRemove, walUpsert, type WalStore } from "@/lib/offlineWal";
 import {
@@ -18,12 +21,16 @@ import {
   formatUTCISOStringToLA_friendly,
 } from "@/lib/time";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import type { TableData, TableRow } from "@/types/domain";
+import type { Runner, TableData, TableRow } from "@/types/domain";
+import type { AccessLevel } from "@/components/AccessIndicator";
 
 type Props = {
   initialData: TableData;
+  initialRunners: Runner[];
   isAdmin: boolean;
+  isLoggedIn: boolean;
   canEdit: boolean;
+  accessLevel: AccessLevel;
 };
 
 type OfflineOp = {
@@ -148,7 +155,14 @@ function recomputeDerived(input: TableData): TableData {
   };
 }
 
-export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
+export default function TableClient({
+  initialData,
+  initialRunners,
+  isAdmin,
+  isLoggedIn,
+  canEdit,
+  accessLevel,
+}: Props) {
   const [data, setData] = useState<TableData>(() => recomputeDerived(initialData));
   const [viewMode, setViewMode] = useState<"race" | "plan" | "runner-stats">("plan");
   const [busy, setBusy] = useState(false);
@@ -189,15 +203,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       // ignore storage errors
     }
 
-    const isCoarsePointer =
-      typeof window !== "undefined" &&
-      window.matchMedia &&
-      window.matchMedia("(pointer: coarse)").matches;
-    const smallScreen =
-      typeof window !== "undefined" &&
-      window.matchMedia &&
-      window.matchMedia("(max-width: 640px)").matches;
-    setViewMode(isCoarsePointer || smallScreen ? "race" : "plan");
+    setViewMode("plan");
   }, []);
 
   useEffect(() => {
@@ -1242,20 +1248,39 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
 
   return (
     <div ref={tableRootRef} style={{ display: "grid", gap: "1rem" }}>
+      {viewMode !== "race" ? (
+        <header className="panel" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h1>Hood to Coast Relay Planner</h1>
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            {accessLevel === "admin" ? <span>Admin Mode</span> : null}
+            {!isAdmin ? <Link href="/admin/login">Admin login</Link> : null}
+            {isLoggedIn ? <LogoutButton /> : null}
+          </div>
+        </header>
+      ) : null}
+
+      {viewMode === "plan" && accessLevel === "team-editor" ? (
+        <div className="panel" style={{ borderColor: "#1f5134", backgroundColor: "#eef9f0", padding: "0.6rem 0.8rem" }}>
+          <strong>Team Editor Mode</strong> — you can edit paces and times
+        </div>
+      ) : null}
+
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-        <button
-          className={viewMode === "race" ? "" : "secondary"}
-          type="button"
-          onClick={() => setViewMode("race")}
-        >
-          Race Mode
-        </button>
         <button
           className={viewMode === "plan" ? "" : "secondary"}
           type="button"
           onClick={() => setViewMode("plan")}
         >
           Planning Mode
+        </button>
+        <button
+          className={viewMode === "race" ? "" : "secondary"}
+          type="button"
+          onClick={() => setViewMode("race")}
+        >
+          Race Mode
         </button>
         <button
           className={viewMode === "runner-stats" ? "" : "secondary"}
@@ -1367,6 +1392,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       ) : (
         <>
           {renderLiveRaceStatusPanel()}
+          {isAdmin ? <RunnersPanel initialRunners={initialRunners} /> : null}
 
       {isOffline || pendingOfflineEdits > 0 ? (
         <section
