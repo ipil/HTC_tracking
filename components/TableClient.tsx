@@ -50,6 +50,21 @@ function getEstimatedDurationSec(row: TableRow): number | null {
   return row.estimatedPaceSpm * row.legMileage;
 }
 
+function getEstimatedFinishTimeIso(row: TableRow): string | null {
+  const startIso =
+    row.actualLegStartTime ??
+    row.updatedEstimatedStartTime ??
+    row.initialEstimatedStartTime;
+
+  if (!startIso) return null;
+  if (!row.estimatedPaceSpm || !row.legMileage) return null;
+
+  const durationSec = row.estimatedPaceSpm * row.legMileage;
+  const finishMs = Date.parse(startIso) + durationSec * 1000;
+
+  return new Date(finishMs).toISOString();
+}
+
 function findNextLegToStart(rows: TableRow[], _nowMs: number): TableRow | null {
   for (const row of rows) {
     if (!row.actualLegStartTime) {
@@ -1138,7 +1153,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
             {upNextRows.map((row) => {
               const expanded = Boolean(expandedUpNext[row.leg]);
               const startIso = row.actualLegStartTime ?? row.updatedEstimatedStartTime;
-              const estimatedDurationSec = getEstimatedDurationSec(row);
+              const finishIso = getEstimatedFinishTimeIso(row);
+              const finishParts = finishIso ? formatUTCISOStringToLARaceDayTime(finishIso) : null;
 
               return (
                 <button
@@ -1165,7 +1181,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                   </div>
                   <div>{row.exchangeLabel || "—"}</div>
                   <div className="muted">
-                    Start: {formatUTCISOStringToLA_friendly(startIso)} | Duration: {formatSecondsToHMS(estimatedDurationSec)}
+                    Start: {formatUTCISOStringToLA_friendly(startIso)} | Estimated finish: {finishParts ? `${finishParts.day === "sat" ? "Sat." : "Fri."} ${finishParts.hour}:${finishParts.minute} ${finishParts.meridiem.toUpperCase()}` : "—"}
                   </div>
                   {expanded ? (
                     <div style={{ display: "grid", gap: "0.25rem" }}>
