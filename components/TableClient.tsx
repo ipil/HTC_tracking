@@ -1519,7 +1519,7 @@ export default function TableClient({
         </button>
       </div>
 
-      <section className="table-wrap">
+      <section className="planning-table-wrap">
         {DEBUG_WAL ? (
           <div className="muted" style={{ padding: "0.5rem 0.6rem", fontSize: "0.8rem" }}>
             WAL pending: {walCount} | Offline: {isOffline ? "yes" : "no"} | Stream: {streamConnected ? "connected" : "disconnected"} | Last stream: {lastStreamEventAt ? new Date(lastStreamEventAt).toLocaleTimeString() : "-"} | Last sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "-"} | Server NOTIFY count: {serverNotifyCount} | Server last NOTIFY: {serverLastNotifyAt ? new Date(serverLastNotifyAt).toLocaleTimeString() : "-"}
@@ -1530,7 +1530,7 @@ export default function TableClient({
             Names are edited in the Runners panel (Admin).
           </div>
         ) : null}
-        <div className="sheet-scroll">
+        <div className="planning-sheet-scroll">
           <table>
             <thead>
               <tr>
