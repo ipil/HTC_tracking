@@ -132,6 +132,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [serverNotifyCount, setServerNotifyCount] = useState(0);
   const [serverLastNotifyAt, setServerLastNotifyAt] = useState<number | null>(null);
   const [onlineTick, setOnlineTick] = useState(0);
+  const [nowTick, setNowTick] = useState(Date.now());
 
   // Keep refs for the latest data and WAL so mobile Safari refresh/pagehide cannot drop the last edit.
   const dataRef = useRef<TableData>(data);
@@ -143,6 +144,14 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowTick(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   function parseCachedTableValue(raw: string | null): { data: TableData | null; cachedAt: number } {
     if (!raw) {
@@ -908,8 +917,107 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     });
   }, [data.race_start_time, data.rows]);
 
+  const liveVanStatus = useMemo(() => {
+    const rowsWithTimeline = data.rows.map((row) => {
+      const startIso = row.actualLegStartTime ?? row.updatedEstimatedStartTime;
+      const startTimeMs = startIso ? Date.parse(startIso) : null;
+      const durationSec =
+        row.estimatedPaceSpm !== null && Number.isFinite(row.legMileage)
+          ? Math.round(row.legMileage * row.estimatedPaceSpm)
+          : null;
+      const endTimeMs =
+        startTimeMs !== null && durationSec !== null ? startTimeMs + durationSec * 1000 : null;
+
+      return {
+        row,
+        startIso,
+        startTimeMs,
+        durationSec,
+        endTimeMs,
+      };
+    });
+
+    const actualCurrent =
+      rowsWithTimeline.find(
+        ({ row, startTimeMs, endTimeMs }) =>
+          row.actualLegStartTime &&
+          startTimeMs !== null &&
+          startTimeMs <= nowTick &&
+          (endTimeMs === null || nowTick < endTimeMs)
+      ) ?? null;
+
+    const estimatedCurrent =
+      rowsWithTimeline.find(
+        ({ row, startTimeMs, endTimeMs }) =>
+          !row.actualLegStartTime &&
+          startTimeMs !== null &&
+          startTimeMs <= nowTick &&
+          (endTimeMs === null || nowTick < endTimeMs)
+      ) ?? null;
+
+    const currentEntry =
+      actualCurrent ??
+      estimatedCurrent ??
+      rowsWithTimeline.find(({ startTimeMs }) => startTimeMs !== null && startTimeMs > nowTick) ??
+      rowsWithTimeline[0] ??
+      null;
+
+    if (!currentEntry) {
+      return null;
+    }
+
+    const isRaceStarted =
+      currentEntry.startTimeMs !== null ? currentEntry.startTimeMs <= nowTick : false;
+    const nextRow = data.rows.find((candidate) => candidate.leg === currentEntry.row.leg + 1) ?? null;
+    const etaMs = currentEntry.endTimeMs ?? (nextRow?.updatedEstimatedStartTime ? Date.parse(nextRow.updatedEstimatedStartTime) : null);
+    const countdownSec = etaMs !== null ? Math.max(0, Math.floor((etaMs - nowTick) / 1000)) : null;
+    const activeVan = currentEntry.row.runnerNumber <= 6 ? "Van 1" : "Van 2";
+    const nextExchangeLabel = nextRow?.exchangeLabel ?? null;
+    const nextExchangeUrl = nextRow?.exchangeUrl ?? null;
+
+    return {
+      modeLabel: isRaceStarted ? "Now running" : "Next up",
+      currentRow: currentEntry.row,
+      activeVan,
+      nextExchangeLabel,
+      nextExchangeUrl,
+      etaIso:
+        etaMs !== null && Number.isFinite(etaMs) ? new Date(etaMs).toISOString() : null,
+      countdownSec,
+      isFinalLeg: currentEntry.row.leg === 36,
+    };
+  }, [data.rows, nowTick]);
+
   return (
     <div ref={tableRootRef} style={{ display: "grid", gap: "1rem" }}>
+      {liveVanStatus ? (
+        <section className="panel" style={{ display: "grid", gap: "0.45rem" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "0.75rem", flexWrap: "wrap" }}>
+            <strong>
+              {liveVanStatus.modeLabel}: Runner {liveVanStatus.currentRow.runnerNumber}
+              {liveVanStatus.currentRow.runnerName ? ` — ${liveVanStatus.currentRow.runnerName}` : ""}
+            </strong>
+            <span className="muted">{liveVanStatus.activeVan} active</span>
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+            <span>
+              {liveVanStatus.isFinalLeg
+                ? "Final leg"
+                : `Next exchange: ${liveVanStatus.nextExchangeLabel || "—"}`}
+            </span>
+            {!liveVanStatus.isFinalLeg && liveVanStatus.nextExchangeUrl ? (
+              <a href={liveVanStatus.nextExchangeUrl} target="_blank" rel="noreferrer">
+                Navigate
+              </a>
+            ) : null}
+          </div>
+          <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+            <span>ETA: {formatUTCISOStringToLA_friendly(liveVanStatus.etaIso)}</span>
+            <span>In: {formatSecondsToHMS(liveVanStatus.countdownSec)}</span>
+          </div>
+        </section>
+      ) : null}
+
       {isOffline || pendingOfflineEdits > 0 ? (
         <section
           className="panel"
