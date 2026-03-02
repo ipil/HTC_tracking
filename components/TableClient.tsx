@@ -50,6 +50,15 @@ function getEstimatedDurationSec(row: TableRow): number | null {
   return row.estimatedPaceSpm * row.legMileage;
 }
 
+function findNextLegToStart(rows: TableRow[], _nowMs: number): TableRow | null {
+  for (const row of rows) {
+    if (!row.actualLegStartTime) {
+      return row;
+    }
+  }
+  return null;
+}
+
 /**
  * Recompute all derived fields client-side using the same math as getTableData().
  * This is what enables “Google Sheets-like” cascading updates while offline.
@@ -958,6 +967,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
 
   const liveVanStatus = useMemo(() => {
     const now = Date.now();
+    const nextLegToStart = findNextLegToStart(data.rows, now);
+    const lastStarted = [...data.rows].reverse().find((row) => !!row.actualLegStartTime) ?? null;
 
     const rowsWithTimeline = data.rows.map((row) => {
       const startIso = row.actualLegStartTime ?? row.updatedEstimatedStartTime;
@@ -989,7 +1000,14 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
           (endMs === null || now < endMs)
       ) ?? null;
 
-    const currentEntry = actualCurrent ?? estimatedCurrent ?? rowsWithTimeline[0] ?? null;
+    const currentEntry =
+      (lastStarted
+        ? rowsWithTimeline.find((entry) => entry.row.leg === lastStarted.leg) ?? null
+        : null) ??
+      actualCurrent ??
+      estimatedCurrent ??
+      rowsWithTimeline[0] ??
+      null;
     if (!currentEntry) {
       return null;
     }
@@ -1002,6 +1020,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       raceStarted,
       currentRow: currentEntry.row,
       currentLegIndex: data.rows.findIndex((candidate) => candidate.leg === currentEntry.row.leg),
+      nextLegToStart,
       activeVan: currentEntry.row.runnerNumber <= 6 ? "Van 1" : "Van 2",
       etaIso:
         currentEntry.endMs !== null && Number.isFinite(currentEntry.endMs)
@@ -1016,7 +1035,9 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     if (!liveVanStatus) {
       return [];
     }
-    const startIndex = Math.max(0, liveVanStatus.currentLegIndex);
+    const startIndex = liveVanStatus.nextLegToStart
+      ? data.rows.findIndex((candidate) => candidate.leg === liveVanStatus.nextLegToStart?.leg)
+      : Math.max(0, liveVanStatus.currentLegIndex + 1);
     return data.rows.slice(startIndex, startIndex + 3);
   }, [data.rows, liveVanStatus]);
 
@@ -1167,19 +1188,27 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
           </section>
 
           <section className="panel" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <span className="muted" style={{ alignSelf: "center" }}>
+              {liveVanStatus?.nextLegToStart
+                ? `Next to start: Leg ${liveVanStatus.nextLegToStart.leg} — Runner ${liveVanStatus.nextLegToStart.runnerNumber}${liveVanStatus.nextLegToStart.runnerName ? ` (${liveVanStatus.nextLegToStart.runnerName})` : ""}`
+                : "All legs started"}
+            </span>
             <button
               type="button"
-              disabled={!canEdit || !liveVanStatus || (!!liveVanStatus.currentRow.actualLegStartTime && liveVanStatus.raceStarted)}
+              disabled={!canEdit || !liveVanStatus?.nextLegToStart}
               onClick={() => {
-                if (!liveVanStatus) {
+                const target = findNextLegToStart(data.rows, Date.now());
+                if (!target) {
                   return;
                 }
                 const iso = new Date().toISOString();
-                handleActualStartChange(liveVanStatus.currentRow.leg, iso);
-                handleActualStartCommit(liveVanStatus.currentRow.leg, iso);
+                handleActualStartChange(target.leg, iso);
+                handleActualStartCommit(target.leg, iso);
               }}
             >
-              Mark Start Now
+              {liveVanStatus?.nextLegToStart
+                ? `Mark Start Now (Leg ${liveVanStatus.nextLegToStart.leg} — Runner ${liveVanStatus.nextLegToStart.runnerNumber})`
+                : "Mark Start Now"}
             </button>
             <button className="secondary" type="button" onClick={() => setViewMode("plan")}>
               Open Spreadsheet
