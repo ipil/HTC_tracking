@@ -1265,6 +1265,13 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
           Runner Stats
         </button>
       </div>
+      <div className="muted" style={{ fontSize: "0.9rem" }}>
+        {viewMode === "race"
+          ? "Race Mode: Quick glance at the next few ETAs and a button to push at the handoff time"
+          : viewMode === "plan"
+            ? "Planning Mode: Full spreadsheet with all race info - input your estimated pace(s) here"
+            : "Runner Stats: Quick visualization of each runner's legs"}
+      </div>
 
       {viewMode === "race" ? (
         <>
