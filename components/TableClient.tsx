@@ -1159,6 +1159,9 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                 <th rowSpan={2} style={compactHeaderStyle}>Runner #</th>
                 <th rowSpan={2} style={compactHeaderStyle}>Runner Name</th>
                 <th rowSpan={2} style={compactHeaderStyle}>Van</th>
+                <th rowSpan={2} style={compactHeaderStyle}>Total Mi</th>
+                <th rowSpan={2} style={compactHeaderStyle}>Total Gain</th>
+                <th rowSpan={2} style={compactHeaderStyle}>Total Loss</th>
                 <th colSpan={5} style={compactHeaderStyle}>Leg 1</th>
                 <th colSpan={5} style={compactHeaderStyle}>Leg 2</th>
                 <th colSpan={5} style={compactHeaderStyle}>Leg 3</th>
@@ -1176,11 +1179,19 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
               </tr>
             </thead>
             <tbody>
-              {runnerStatsRows.map((runner) => (
+              {runnerStatsRows.map((runner) => {
+                const totalMileage = runner.legs.reduce((sum, leg) => sum + leg.legMileage, 0);
+                const totalGain = runner.legs.reduce((sum, leg) => sum + leg.elevGainFt, 0);
+                const totalLoss = runner.legs.reduce((sum, leg) => sum + leg.elevLossFt, 0);
+
+                return (
                 <tr key={runner.runnerNumber}>
-                  <td style={compactCellStyle}>{runner.runnerNumber}</td>
-                  <td style={compactCellStyle}>{runner.runnerName || "—"}</td>
-                  <td style={compactCellStyle}>{runner.van}</td>
+                  <td style={{ ...compactCellStyle, ...getVanCellStyle(runner.runnerNumber, "runner") }}>{runner.runnerNumber}</td>
+                  <td style={{ ...compactCellStyle, ...getVanCellStyle(runner.runnerNumber, "name") }}>{runner.runnerName || "—"}</td>
+                  <td style={{ ...compactCellStyle, ...getVanCellStyle(runner.runnerNumber, "leg") }}>{runner.van}</td>
+                  <td style={{ ...compactCellStyle, ...getVanCellStyle(runner.runnerNumber, "runner") }}>{totalMileage.toFixed(2)}</td>
+                  <td style={{ ...compactCellStyle, ...getVanCellStyle(runner.runnerNumber, "name") }}>{totalGain}</td>
+                  <td style={{ ...compactCellStyle, ...getVanCellStyle(runner.runnerNumber, "leg") }}>{totalLoss}</td>
                   {Array.from({ length: 3 }, (_, legIndex) => {
                     const legRow = runner.legs[legIndex] ?? null;
                     return (
@@ -1202,7 +1213,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
                     );
                   })}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1325,7 +1337,6 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
         </>
       ) : viewMode === "runner-stats" ? (
         <>
-          {renderLiveRaceStatusPanel()}
           {renderRunnerStatsMode()}
         </>
       ) : (
