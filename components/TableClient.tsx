@@ -122,11 +122,13 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [isOffline, setIsOffline] = useState(false);
   const [pendingOfflineEdits, setPendingOfflineEdits] = useState(0);
   const [walCount, setWalCount] = useState(0);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
 
   // Keep refs for the latest data and WAL so mobile Safari refresh/pagehide cannot drop the last edit.
   const dataRef = useRef<TableData>(data);
   const walRef = useRef<WalStore>({});
   const flushTimersRef = useRef<Record<string, number>>({});
+  const tableRootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     dataRef.current = data;
@@ -188,6 +190,14 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     if (!response.ok) {
       throw new Error(`PATCH failed for ${path}`);
     }
+  }
+
+  async function fetchFreshTable(): Promise<TableData> {
+    const response = await fetch("/api/table", { cache: "no-store", credentials: "include" });
+    if (!response.ok) {
+      throw new Error("Failed to fetch /api/table");
+    }
+    return (await response.json()) as TableData;
   }
 
   // Load pending ops count on mount
@@ -454,6 +464,70 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     return () => window.removeEventListener("online", handleOnline);
   }, []);
 
+  useEffect(() => {
+    function shouldSkipPolling(): boolean {
+      if (!navigator.onLine) {
+        return true;
+      }
+      if (Object.keys(walRef.current).length > 0 || pendingOfflineEdits > 0) {
+        return true;
+      }
+
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLElement &&
+        tableRootRef.current?.contains(active) &&
+        ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)
+      ) {
+        return true;
+      }
+
+      return false;
+    }
+
+    async function syncFromServer(): Promise<void> {
+      if (shouldSkipPolling()) {
+        return;
+      }
+
+      try {
+        const serverData = await fetchFreshTable();
+        const serverDataWithWal = recomputeDerived(applyWalToTableData(serverData, walRef.current));
+        setDataAndCache(serverDataWithWal);
+        if (DEBUG_WAL) {
+          setLastSyncAt(Date.now());
+        }
+      } catch {
+        // ignore sync failures and keep current state
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void syncFromServer();
+    }, 8000);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void syncFromServer();
+      }
+    };
+
+    const onFocus = () => {
+      void syncFromServer();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+
+    void syncFromServer();
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [pendingOfflineEdits]);
+
   function updateRowLocal(leg: number, patchObj: Partial<TableRow>) {
     const next = recomputeDerived({
       ...dataRef.current,
@@ -689,7 +763,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   }, [data.race_start_time, data.rows]);
 
   return (
-    <div style={{ display: "grid", gap: "1rem" }}>
+    <div ref={tableRootRef} style={{ display: "grid", gap: "1rem" }}>
       {isOffline || pendingOfflineEdits > 0 ? (
         <section
           className="panel"
@@ -786,7 +860,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       <section className="table-wrap">
         {DEBUG_WAL ? (
           <div className="muted" style={{ padding: "0.5rem 0.6rem", fontSize: "0.8rem" }}>
-            WAL pending: {walCount} | Offline: {isOffline ? "yes" : "no"}
+            WAL pending: {walCount} | Offline: {isOffline ? "yes" : "no"} | Last sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "-"}
           </div>
         ) : null}
         {isAdmin ? (
