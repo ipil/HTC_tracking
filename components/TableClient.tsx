@@ -123,6 +123,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [pendingOfflineEdits, setPendingOfflineEdits] = useState(0);
   const [walCount, setWalCount] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [streamConnected, setStreamConnected] = useState(false);
 
   // Keep refs for the latest data and WAL so mobile Safari refresh/pagehide cannot drop the last edit.
   const dataRef = useRef<TableData>(data);
@@ -490,6 +491,68 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     window.addEventListener("storage", handler);
     return () => window.removeEventListener("storage", handler);
   }, []);
+
+  useEffect(() => {
+    if (isOffline) {
+      setStreamConnected(false);
+      return;
+    }
+
+    const es = new EventSource("/api/stream");
+
+    const shouldSkipServerApply = (): boolean => {
+      if (Object.keys(walRef.current).length > 0 || pendingOfflineEdits > 0) {
+        return true;
+      }
+
+      const active = document.activeElement;
+      return Boolean(
+        active instanceof HTMLElement &&
+          tableRootRef.current?.contains(active) &&
+          ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName)
+      );
+    };
+
+    const applyServerUpdate = async () => {
+      if (shouldSkipServerApply()) {
+        return;
+      }
+
+      try {
+        const serverData = await fetchFreshTable();
+        const serverDataWithWal = recomputeDerived(applyWalToTableData(serverData, walRef.current));
+        setDataAndCache(serverDataWithWal);
+        if (DEBUG_WAL) {
+          setLastSyncAt(Date.now());
+        }
+      } catch {
+        // ignore server sync failures
+      }
+    };
+
+    const onReady = () => {
+      setStreamConnected(true);
+    };
+
+    const onUpdate = () => {
+      void applyServerUpdate();
+    };
+
+    const onError = () => {
+      setStreamConnected(false);
+    };
+
+    es.addEventListener("ready", onReady);
+    es.addEventListener("update", onUpdate);
+    es.onerror = onError;
+
+    return () => {
+      es.removeEventListener("ready", onReady);
+      es.removeEventListener("update", onUpdate);
+      es.close();
+      setStreamConnected(false);
+    };
+  }, [isOffline, pendingOfflineEdits]);
 
   useEffect(() => {
     function shouldSkipPolling(): boolean {
@@ -887,7 +950,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       <section className="table-wrap">
         {DEBUG_WAL ? (
           <div className="muted" style={{ padding: "0.5rem 0.6rem", fontSize: "0.8rem" }}>
-            WAL pending: {walCount} | Offline: {isOffline ? "yes" : "no"} | Last sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "-"}
+            WAL pending: {walCount} | Offline: {isOffline ? "yes" : "no"} | Stream: {streamConnected ? "connected" : "disconnected"} | Last sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "-"}
           </div>
         ) : null}
         {isAdmin ? (

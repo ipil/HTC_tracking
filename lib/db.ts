@@ -48,4 +48,11 @@ sql.query = async <TRow extends RowObject = RowObject>(
   return { rows: result.rows };
 };
 
-export { sql };
+async function notifyTableChanged(path?: string): Promise<void> {
+  await sql.query(
+    "select pg_notify('htc_updates', $1)",
+    [JSON.stringify({ type: "table_changed", path, at: Date.now() })]
+  );
+}
+
+export { sql, getConnectionString, notifyTableChanged };

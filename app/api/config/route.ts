@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { notifyTableChanged, sql } from "@/lib/db";
 import { isSiteAuthenticated } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/http";
 import { normalizeUTCISOString } from "@/lib/time";
@@ -46,6 +46,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   );
 
   console.info("[api/config] updated app_config id=1");
+  await notifyTableChanged(request.nextUrl.pathname);
   const row = result.rows[0];
   return NextResponse.json({
     id: row.id,

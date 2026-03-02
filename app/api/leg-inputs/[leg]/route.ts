@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { notifyTableChanged, sql } from "@/lib/db";
 import { isSiteAuthenticated } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/http";
 import { normalizeUTCISOString } from "@/lib/time";
@@ -57,6 +57,7 @@ export async function PATCH(
     actual_start_time: unknown;
     updated_at: unknown;
   }>(query, values);
+  await notifyTableChanged(request.nextUrl.pathname);
   console.info(`[api/leg-inputs] updated leg=${leg}`);
 
   const row = result.rows[0];

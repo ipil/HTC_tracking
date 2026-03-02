@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { notifyTableChanged, sql } from "@/lib/db";
 import { isAdminAuthenticated, isSiteAuthenticated } from "@/lib/auth";
 import { badRequest, forbidden, unauthorized } from "@/lib/http";
 
@@ -48,6 +48,7 @@ export async function PATCH(
   values.push(leg);
   const updateSql = `update legs set ${updates.join(", ")}, updated_at = now() where leg = $${values.length}`;
   await sql.query(updateSql, values);
+  await notifyTableChanged(request.nextUrl.pathname);
   console.info(`[api/legs] updated leg=${leg}`);
 
   return NextResponse.json({ ok: true });

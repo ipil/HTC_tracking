@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { notifyTableChanged, sql } from "@/lib/db";
 import { badRequest, forbidden, unauthorized } from "@/lib/http";
 import { normalizeUTCISOString } from "@/lib/time";
 
@@ -62,6 +62,7 @@ export async function PATCH(
     updated_at: unknown;
   }>(query, values);
 
+  await notifyTableChanged(request.nextUrl.pathname);
   console.info(`[api/runners] updated runner_number=${runnerNumber}`);
   const row = result.rows[0];
   return NextResponse.json({
