@@ -28,30 +28,18 @@ export function computeUpdatedEstimates(
 ): Array<string | null> {
   const out = [...initial];
 
-  let latestIdx = -1;
-  for (let i = 0; i < actualStarts.length; i += 1) {
-    if (actualStarts[i]) {
-      out[i] = actualStarts[i];
-      latestIdx = i;
-    }
-  }
-
-  if (latestIdx < 0) {
-    return out;
-  }
-
-  const anchor = actualStarts[latestIdx];
-  if (!anchor) {
-    return out;
-  }
-
-  let cursor = DateTime.fromISO(anchor, { zone: "utc" });
-  for (let i = latestIdx + 1; i < out.length; i += 1) {
+  for (let i = 1; i < out.length; i += 1) {
     const prevDuration = estimatedDurationsSec[i - 1];
-    if (prevDuration !== null && Number.isFinite(prevDuration)) {
-      cursor = cursor.plus({ seconds: prevDuration });
-      out[i] = cursor.toISO();
+    if (prevDuration === null || !Number.isFinite(prevDuration)) {
+      continue;
     }
+
+    const anchor = actualStarts[i - 1] ?? out[i - 1];
+    if (!anchor) {
+      continue;
+    }
+
+    out[i] = DateTime.fromISO(anchor, { zone: "utc" }).plus({ seconds: prevDuration }).toISO();
   }
 
   return out;
@@ -101,11 +89,12 @@ export function computeVanStints(
     let estSum = 0;
     let estComplete = true;
     for (let i = start; i <= idx; i += 1) {
-      if (estimatedDurations[i] === null) {
+      const hybridDuration = actualDurations[i] ?? estimatedDurations[i];
+      if (hybridDuration === null) {
         estComplete = false;
         break;
       }
-      estSum += estimatedDurations[i] ?? 0;
+      estSum += hybridDuration;
     }
     estimated[idx] = estComplete ? estSum : null;
 
