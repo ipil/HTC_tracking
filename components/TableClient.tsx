@@ -222,9 +222,12 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     const wal = loadWal();
     walRef.current = wal;
     setWalCount(Object.keys(wal).length);
-    const recomputed = recomputeDerived(applyWalToTableData(base, wal));
+    const withWal = applyWalToTableData(base, wal);
+    const recomputed = recomputeDerived(withWal);
     setDataAndCache(recomputed);
-  }, [initialData]);
+    // initialData is the server-provided mount snapshot; hydrate exactly once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Extra safety: flush cache when tab/app is backgrounded or navigated away (mobile Safari especially)
   useEffect(() => {
