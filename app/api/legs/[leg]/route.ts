@@ -48,7 +48,11 @@ export async function PATCH(
   values.push(leg);
   const updateSql = `update legs set ${updates.join(", ")}, updated_at = now() where leg = $${values.length}`;
   await sql.query(updateSql, values);
-  await notifyTableChanged(request.nextUrl.pathname);
+  try {
+    await notifyTableChanged(`/api/legs/${leg}`);
+  } catch (error) {
+    console.warn("notify failed", error);
+  }
   console.info(`[api/legs] updated leg=${leg}`);
 
   return NextResponse.json({ ok: true });

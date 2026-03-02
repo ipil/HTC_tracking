@@ -57,7 +57,11 @@ export async function PATCH(
     actual_start_time: unknown;
     updated_at: unknown;
   }>(query, values);
-  await notifyTableChanged(request.nextUrl.pathname);
+  try {
+    await notifyTableChanged(`/api/leg-inputs/${leg}`);
+  } catch (error) {
+    console.warn("notify failed", error);
+  }
   console.info(`[api/leg-inputs] updated leg=${leg}`);
 
   const row = result.rows[0];

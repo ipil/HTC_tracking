@@ -46,7 +46,11 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   );
 
   console.info("[api/config] updated app_config id=1");
-  await notifyTableChanged(request.nextUrl.pathname);
+  try {
+    await notifyTableChanged("/api/config");
+  } catch (error) {
+    console.warn("notify failed", error);
+  }
   const row = result.rows[0];
   return NextResponse.json({
     id: row.id,

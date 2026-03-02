@@ -62,7 +62,11 @@ export async function PATCH(
     updated_at: unknown;
   }>(query, values);
 
-  await notifyTableChanged(request.nextUrl.pathname);
+  try {
+    await notifyTableChanged(`/api/runners/${runnerNumber}`);
+  } catch (error) {
+    console.warn("notify failed", error);
+  }
   console.info(`[api/runners] updated runner_number=${runnerNumber}`);
   const row = result.rows[0];
   return NextResponse.json({
