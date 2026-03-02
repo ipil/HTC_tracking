@@ -26,6 +26,15 @@ export default function RaceDayTimeInput({
   onChange,
   onCommit
 }: Props): React.JSX.Element {
+  const isCoarsePointer =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(pointer: coarse)").matches;
+  const smallScreen =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(max-width: 640px)").matches;
+  const isMobileUI = isCoarsePointer || smallScreen;
   const initial = value
     ? formatUTCISOStringToLARaceDayTime(value)
     : { day: defaultDay, hour: "", minute: "", meridiem: defaultMeridiem };
@@ -78,6 +87,12 @@ export default function RaceDayTimeInput({
     onCommit(nextIso(day, hour, minute, meridiem));
   }
 
+  function maybeCommitMobile(iso: string | null) {
+    if (isMobileUI && commitMode === "blur" && onCommit && hour && minute) {
+      onCommit(iso);
+    }
+  }
+
   return (
     <div
       style={{
@@ -105,7 +120,9 @@ export default function RaceDayTimeInput({
           checked={day === "fri"}
           onChange={() => {
             setDay("fri");
-            onChange(nextIso("fri", hour, minute, meridiem));
+            const iso = nextIso("fri", hour, minute, meridiem);
+            onChange(iso);
+            maybeCommitMobile(iso);
           }}
         />
         <span>Fri.</span>
@@ -117,54 +134,112 @@ export default function RaceDayTimeInput({
           checked={day === "sat"}
           onChange={() => {
             setDay("sat");
-            onChange(nextIso("sat", hour, minute, meridiem));
+            const iso = nextIso("sat", hour, minute, meridiem);
+            onChange(iso);
+            maybeCommitMobile(iso);
           }}
         />
         <span>Sat.</span>
       </label>
-      <input
-        type="number"
-        disabled={disabled}
-        inputMode="numeric"
-        min="1"
-        max="12"
-        placeholder="hh"
-        value={hour}
-        onChange={(event) => {
-          const nextHour = event.target.value;
-          setHour(nextHour);
-          onChange(nextIso(day, nextHour, minute, meridiem));
-        }}
-        onKeyDown={(event) => {
-          if (commitMode === "enter" && event.key === "Enter") {
-            commit();
-            (event.currentTarget as HTMLInputElement).blur();
-          }
-        }}
-        style={{ width: 56 }}
-      />
+      {isMobileUI ? (
+        <select
+          aria-label="Hour"
+          disabled={disabled}
+          value={hour}
+          onChange={(event) => {
+            const nextHour = event.target.value;
+            setHour(nextHour);
+            const iso = nextIso(day, nextHour, minute, meridiem);
+            onChange(iso);
+            if (nextHour && minute) {
+              maybeCommitMobile(iso);
+            }
+          }}
+          style={{ width: 68 }}
+        >
+          <option value="">hh</option>
+          {Array.from({ length: 12 }, (_, index) => {
+            const value = String(index + 1);
+            return (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            );
+          })}
+        </select>
+      ) : (
+        <input
+          type="number"
+          disabled={disabled}
+          inputMode="numeric"
+          min="1"
+          max="12"
+          placeholder="hh"
+          value={hour}
+          onChange={(event) => {
+            const nextHour = event.target.value.replace(/[^\d]/g, "").slice(0, 2);
+            setHour(nextHour);
+            onChange(nextIso(day, nextHour, minute, meridiem));
+          }}
+          onKeyDown={(event) => {
+            if (commitMode === "enter" && event.key === "Enter") {
+              commit();
+              (event.currentTarget as HTMLInputElement).blur();
+            }
+          }}
+          style={{ width: 56 }}
+        />
+      )}
       <span className="muted">:</span>
-      <input
-        type="number"
-        disabled={disabled}
-        inputMode="numeric"
-        min="0"
-        max="59"
-        placeholder="mm"
-        value={minute}
-        onChange={(event) => {
-          const nextMinute = event.target.value;
-          setMinute(nextMinute);
-          onChange(nextIso(day, hour, nextMinute, meridiem));
-        }}
-        onKeyDown={(event) => {
-          if (commitMode === "enter" && event.key === "Enter") {
-            commit();
-            (event.currentTarget as HTMLInputElement).blur();
-          }
-        }}
-        style={{ width: 62 }}
-      />
+      {isMobileUI ? (
+        <select
+          aria-label="Minute"
+          disabled={disabled}
+          value={minute}
+          onChange={(event) => {
+            const nextMinute = event.target.value;
+            setMinute(nextMinute);
+            const iso = nextIso(day, hour, nextMinute, meridiem);
+            onChange(iso);
+            if (hour && nextMinute) {
+              maybeCommitMobile(iso);
+            }
+          }}
+          style={{ width: 74 }}
+        >
+          <option value="">mm</option>
+          {Array.from({ length: 60 }, (_, index) => {
+            const value = String(index).padStart(2, "0");
+            return (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            );
+          })}
+        </select>
+      ) : (
+        <input
+          type="number"
+          disabled={disabled}
+          inputMode="numeric"
+          min="0"
+          max="59"
+          placeholder="mm"
+          value={minute}
+          onChange={(event) => {
+            const nextMinute = event.target.value.replace(/[^\d]/g, "").slice(0, 2);
+            setMinute(nextMinute);
+            onChange(nextIso(day, hour, nextMinute, meridiem));
+          }}
+          onKeyDown={(event) => {
+            if (commitMode === "enter" && event.key === "Enter") {
+              commit();
+              (event.currentTarget as HTMLInputElement).blur();
+            }
+          }}
+          style={{ width: 62 }}
+        />
+      )}
       <label style={{ display: "inline-flex", gap: "0.2rem", alignItems: "center" }}>
         <input
           type="radio"
@@ -172,7 +247,9 @@ export default function RaceDayTimeInput({
           checked={meridiem === "am"}
           onChange={() => {
             setMeridiem("am");
-            onChange(nextIso(day, hour, minute, "am"));
+            const iso = nextIso(day, hour, minute, "am");
+            onChange(iso);
+            maybeCommitMobile(iso);
           }}
         />
         <span>AM</span>
@@ -184,7 +261,9 @@ export default function RaceDayTimeInput({
           checked={meridiem === "pm"}
           onChange={() => {
             setMeridiem("pm");
-            onChange(nextIso(day, hour, minute, "pm"));
+            const iso = nextIso(day, hour, minute, "pm");
+            onChange(iso);
+            maybeCommitMobile(iso);
           }}
         />
         <span>PM</span>
