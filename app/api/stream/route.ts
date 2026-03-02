@@ -1,4 +1,5 @@
-import { Pool } from "@neondatabase/serverless";
+import WebSocket from "ws";
+import { neonConfig, Pool } from "@neondatabase/serverless";
 import { NextRequest } from "next/server";
 import { getConnectionString } from "@/lib/db";
 
@@ -9,6 +10,7 @@ export const revalidate = 0;
 export async function GET(req: NextRequest): Promise<Response> {
   const encoder = new TextEncoder();
   const connectionString = getConnectionString();
+  neonConfig.webSocketConstructor = WebSocket;
   const pool = new Pool({ connectionString });
   type PgNotification = { channel: string; payload?: string | null };
 
