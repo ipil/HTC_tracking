@@ -124,6 +124,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [walCount, setWalCount] = useState(0);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
   const [streamConnected, setStreamConnected] = useState(false);
+  const [lastStreamEventAt, setLastStreamEventAt] = useState<number | null>(null);
+  const [onlineTick, setOnlineTick] = useState(0);
 
   // Keep refs for the latest data and WAL so mobile Safari refresh/pagehide cannot drop the last edit.
   const dataRef = useRef<TableData>(data);
@@ -287,14 +289,22 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   // Track offline/online state
   useEffect(() => {
     const update = () => setIsOffline(!navigator.onLine);
+    const onOnline = () => {
+      setIsOffline(false);
+      setOnlineTick((tick) => tick + 1);
+    };
+    const onOffline = () => {
+      setIsOffline(true);
+      setStreamConnected(false);
+    };
 
     update(); // initial value on mount
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
 
     return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
     };
   }, []);
 
@@ -535,6 +545,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     };
 
     const onUpdate = () => {
+      setLastStreamEventAt(Date.now());
       void applyServerUpdate();
     };
 
@@ -552,7 +563,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       es.close();
       setStreamConnected(false);
     };
-  }, [isOffline, pendingOfflineEdits]);
+  }, [isOffline, onlineTick, pendingOfflineEdits]);
 
   useEffect(() => {
     function shouldSkipPolling(): boolean {
@@ -950,7 +961,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
       <section className="table-wrap">
         {DEBUG_WAL ? (
           <div className="muted" style={{ padding: "0.5rem 0.6rem", fontSize: "0.8rem" }}>
-            WAL pending: {walCount} | Offline: {isOffline ? "yes" : "no"} | Stream: {streamConnected ? "connected" : "disconnected"} | Last sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "-"}
+            WAL pending: {walCount} | Offline: {isOffline ? "yes" : "no"} | Stream: {streamConnected ? "connected" : "disconnected"} | Last stream: {lastStreamEventAt ? new Date(lastStreamEventAt).toLocaleTimeString() : "-"} | Last sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "-"}
           </div>
         ) : null}
         {isAdmin ? (
