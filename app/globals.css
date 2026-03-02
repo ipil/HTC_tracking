@@ -56,8 +56,8 @@ h3 {
 }
 
 .planning-sheet-scroll {
-  overflow-y: auto;
-  overflow-x: visible;
+  overflow: visible;
+  max-height: none;
 }
 
 table {
