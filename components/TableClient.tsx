@@ -1188,8 +1188,8 @@ export default function TableClient({
     };
 
     return (
-      <section className="table-wrap">
-        <div className="sheet-scroll">
+      <section className="table-wrap planning-table-wrap">
+        <div className="sheet-scroll planning-sheet-scroll">
           <table style={{ width: "max-content", minWidth: "max-content" }}>
             <thead>
               <tr>

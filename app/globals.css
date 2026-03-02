@@ -51,6 +51,15 @@ h3 {
   max-height: calc(100vh - 240px);
 }
 
+.planning-table-wrap {
+  overflow: visible;
+}
+
+.planning-sheet-scroll {
+  overflow-y: auto;
+  overflow-x: visible;
+}
+
 table {
   width: max-content;
   min-width: 100%;
