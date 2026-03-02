@@ -34,6 +34,7 @@ type OfflineOp = {
 
 const OFFLINE_OPS_KEY = "htc-offline-ops";
 const TABLE_CACHE_KEY = "htc-table-cache";
+const VIEW_MODE_KEY = "htc-view-mode";
 const DEBUG_WAL =
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).has("debug");
@@ -125,10 +126,12 @@ function recomputeDerived(input: TableData): TableData {
 
 export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   const [data, setData] = useState<TableData>(() => recomputeDerived(initialData));
+  const [viewMode, setViewMode] = useState<"race" | "plan">("plan");
   const [busy, setBusy] = useState(false);
   const [showLegStats, setShowLegStats] = useState(true);
   const [showRaceTiming, setShowRaceTiming] = useState(true);
   const [showLiveRaceStatus, setShowLiveRaceStatus] = useState(true);
+  const [expandedUpNext, setExpandedUpNext] = useState<Record<number, boolean>>({});
   const [isOffline, setIsOffline] = useState(false);
   const [pendingOfflineEdits, setPendingOfflineEdits] = useState(0);
   const [walCount, setWalCount] = useState(0);
@@ -150,6 +153,36 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(VIEW_MODE_KEY);
+      if (stored === "race" || stored === "plan") {
+        setViewMode(stored);
+        return;
+      }
+    } catch {
+      // ignore storage errors
+    }
+
+    const isCoarsePointer =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(pointer: coarse)").matches;
+    const smallScreen =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(max-width: 640px)").matches;
+    setViewMode(isCoarsePointer || smallScreen ? "race" : "plan");
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_MODE_KEY, viewMode);
+    } catch {
+      // ignore storage errors
+    }
+  }, [viewMode]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -968,6 +1001,7 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     return {
       raceStarted,
       currentRow: currentEntry.row,
+      currentLegIndex: data.rows.findIndex((candidate) => candidate.leg === currentEntry.row.leg),
       activeVan: currentEntry.row.runnerNumber <= 6 ? "Van 1" : "Van 2",
       etaIso:
         currentEntry.endMs !== null && Number.isFinite(currentEntry.endMs)
@@ -978,70 +1012,183 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
     };
   }, [data.rows, tick]);
 
-  return (
-    <div ref={tableRootRef} style={{ display: "grid", gap: "1rem" }}>
-      {liveVanStatus ? (
-        <section className="panel" style={{ display: "grid", gap: "0.65rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <button
-              className="secondary"
-              type="button"
-              aria-label={showLiveRaceStatus ? "Collapse live race status" : "Expand live race status"}
-              onClick={() => setShowLiveRaceStatus((value) => !value)}
-              style={{ padding: "0.15rem 0.45rem", lineHeight: 1 }}
-            >
-              {showLiveRaceStatus ? "\u25be" : "\u25b8"}
-            </button>
-            <h2>Live Race Status</h2>
-          </div>
+  const upNextRows = useMemo(() => {
+    if (!liveVanStatus) {
+      return [];
+    }
+    const startIndex = Math.max(0, liveVanStatus.currentLegIndex);
+    return data.rows.slice(startIndex, startIndex + 3);
+  }, [data.rows, liveVanStatus]);
 
-          {showLiveRaceStatus ? (
-            <>
+  function renderLiveRaceStatusPanel() {
+    if (!liveVanStatus) {
+      return null;
+    }
+
+    return (
+      <section className="panel" style={{ display: "grid", gap: "0.65rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <button
+            className="secondary"
+            type="button"
+            aria-label={showLiveRaceStatus ? "Collapse live race status" : "Expand live race status"}
+            onClick={() => setShowLiveRaceStatus((value) => !value)}
+            style={{ padding: "0.15rem 0.45rem", lineHeight: 1 }}
+          >
+            {showLiveRaceStatus ? "\u25be" : "\u25b8"}
+          </button>
+          <h2>Live Race Status</h2>
+        </div>
+
+        {showLiveRaceStatus ? (
+          <>
+            <div style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.04em", color: "#5c665f" }}>
+              {liveVanStatus.raceStarted ? "NOW RUNNING" : "RACE NOT STARTED"}
+            </div>
+            <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>
+              Runner {liveVanStatus.currentRow.runnerNumber}
+              {liveVanStatus.currentRow.runnerName ? ` — ${liveVanStatus.currentRow.runnerName}` : ""}
+            </div>
+            <div style={{ fontSize: "1rem" }}>
+              <strong>Active:</strong> {liveVanStatus.activeVan}
+            </div>
+            <div style={{ display: "grid", gap: "0.2rem" }}>
               <div style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.04em", color: "#5c665f" }}>
-                {liveVanStatus.raceStarted ? "NOW RUNNING" : "RACE NOT STARTED"}
-              </div>
-              <div style={{ fontSize: "1.15rem", fontWeight: 700 }}>
-                Runner {liveVanStatus.currentRow.runnerNumber}
-                {liveVanStatus.currentRow.runnerName ? ` — ${liveVanStatus.currentRow.runnerName}` : ""}
+                NEXT EXCHANGE
               </div>
               <div style={{ fontSize: "1rem" }}>
-                <strong>Active:</strong> {liveVanStatus.activeVan}
+                {liveVanStatus.isFinalLeg
+                  ? "Final Leg — Heading to Finish"
+                  : liveVanStatus.currentRow.exchangeLabel || "—"}
               </div>
-              <div style={{ display: "grid", gap: "0.2rem" }}>
-                <div style={{ fontSize: "0.8rem", fontWeight: 700, letterSpacing: "0.04em", color: "#5c665f" }}>
-                  NEXT EXCHANGE
+              {!liveVanStatus.isFinalLeg && liveVanStatus.currentRow.exchangeUrl ? (
+                <div>
+                  <a href={liveVanStatus.currentRow.exchangeUrl} target="_blank" rel="noreferrer">
+                    Navigate →
+                  </a>
                 </div>
-                <div style={{ fontSize: "1rem" }}>
-                  {liveVanStatus.isFinalLeg
-                    ? "Final Leg — Heading to Finish"
-                    : liveVanStatus.currentRow.exchangeLabel || "—"}
-                </div>
-                {!liveVanStatus.isFinalLeg && liveVanStatus.currentRow.exchangeUrl ? (
-                  <div>
-                    <a href={liveVanStatus.currentRow.exchangeUrl} target="_blank" rel="noreferrer">
-                      Navigate →
-                    </a>
+              ) : null}
+            </div>
+            <div style={{ display: "grid", gap: "0.35rem" }}>
+              <div>
+                <strong>ETA</strong>
+              </div>
+              <div style={{ fontSize: "1rem" }}>{formatUTCISOStringToLA_friendly(liveVanStatus.etaIso)}</div>
+            </div>
+            <div style={{ display: "grid", gap: "0.35rem" }}>
+              <div>
+                <strong>In</strong>
+              </div>
+              <div style={{ fontSize: "1.1rem", fontVariantNumeric: "tabular-nums" }}>
+                {formatSecondsToHMS(liveVanStatus.countdownSec)}
+              </div>
+            </div>
+          </>
+        ) : null}
+      </section>
+    );
+  }
+
+  return (
+    <div ref={tableRootRef} style={{ display: "grid", gap: "1rem" }}>
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        <button
+          className={viewMode === "race" ? "" : "secondary"}
+          type="button"
+          onClick={() => setViewMode("race")}
+        >
+          Race Mode
+        </button>
+        <button
+          className={viewMode === "plan" ? "" : "secondary"}
+          type="button"
+          onClick={() => setViewMode("plan")}
+        >
+          Planning Mode
+        </button>
+      </div>
+
+      {viewMode === "race" ? (
+        <>
+          {renderLiveRaceStatusPanel()}
+
+          <section className="panel" style={{ display: "grid", gap: "0.75rem" }}>
+            <h2>Up Next</h2>
+            {upNextRows.map((row) => {
+              const expanded = Boolean(expandedUpNext[row.leg]);
+              const startIso = row.actualLegStartTime ?? row.updatedEstimatedStartTime;
+              const estimatedDurationSec = getEstimatedDurationSec(row);
+
+              return (
+                <button
+                  key={row.leg}
+                  type="button"
+                  className="secondary"
+                  onClick={() =>
+                    setExpandedUpNext((prev) => ({
+                      ...prev,
+                      [row.leg]: !prev[row.leg],
+                    }))
+                  }
+                  style={{
+                    textAlign: "left",
+                    display: "grid",
+                    gap: "0.35rem",
+                    padding: "0.75rem",
+                    borderRadius: 10,
+                  }}
+                >
+                  <div style={{ fontWeight: 700 }}>
+                    Leg {row.leg} — Runner {row.runnerNumber}
+                    {row.runnerName ? ` — ${row.runnerName}` : ""}
                   </div>
-                ) : null}
-              </div>
-              <div style={{ display: "grid", gap: "0.35rem" }}>
-                <div>
-                  <strong>ETA</strong>
-                </div>
-                <div style={{ fontSize: "1rem" }}>{formatUTCISOStringToLA_friendly(liveVanStatus.etaIso)}</div>
-              </div>
-              <div style={{ display: "grid", gap: "0.35rem" }}>
-                <div>
-                  <strong>In</strong>
-                </div>
-                <div style={{ fontSize: "1.1rem", fontVariantNumeric: "tabular-nums" }}>
-                  {formatSecondsToHMS(liveVanStatus.countdownSec)}
-                </div>
-              </div>
-            </>
-          ) : null}
-        </section>
-      ) : null}
+                  <div>{row.exchangeLabel || "—"}</div>
+                  <div className="muted">
+                    Start: {formatUTCISOStringToLA_friendly(startIso)} | Duration: {formatSecondsToHMS(estimatedDurationSec)}
+                  </div>
+                  {expanded ? (
+                    <div style={{ display: "grid", gap: "0.25rem" }}>
+                      <div>Pace: {formatSecondsToPace(row.estimatedPaceSpm)}</div>
+                      <div>
+                        Mileage: {row.legMileage.toFixed(2)} mi | Gain: {row.elevGainFt} ft | Loss: {row.elevLossFt} ft
+                      </div>
+                      {row.exchangeUrl ? (
+                        <div>
+                          <a href={row.exchangeUrl} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+                            Navigate →
+                          </a>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </button>
+              );
+            })}
+          </section>
+
+          <section className="panel" style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              disabled={!canEdit || !liveVanStatus || (!!liveVanStatus.currentRow.actualLegStartTime && liveVanStatus.raceStarted)}
+              onClick={() => {
+                if (!liveVanStatus) {
+                  return;
+                }
+                const iso = new Date().toISOString();
+                handleActualStartChange(liveVanStatus.currentRow.leg, iso);
+                handleActualStartCommit(liveVanStatus.currentRow.leg, iso);
+              }}
+            >
+              Mark Start Now
+            </button>
+            <button className="secondary" type="button" onClick={() => setViewMode("plan")}>
+              Open Spreadsheet
+            </button>
+          </section>
+        </>
+      ) : (
+        <>
+          {renderLiveRaceStatusPanel()}
 
       {isOffline || pendingOfflineEdits > 0 ? (
         <section
@@ -1431,6 +1578,8 @@ export default function TableClient({ initialData, isAdmin, canEdit }: Props) {
           </table>
         </div>
       </section>
+        </>
+      )}
     </div>
   );
 }
